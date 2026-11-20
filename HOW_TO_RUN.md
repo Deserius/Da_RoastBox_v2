@@ -76,6 +76,24 @@ skip this step and come back to it later — the app runs in a local demo mode
 without any keys — or use the in-app Settings console instead (passphrase
 below) once the server is running.
 
+**Google sign-in needs one extra one-time step in Google Cloud Console.**
+Pasting a client ID/secret here only checks that Google *recognizes the
+pair* — it can't catch the #1 cause of sign-in failing later with
+`Error 400: redirect_uri_mismatch`. That error means the redirect URI Google
+received doesn't exactly match one of the **Authorized redirect URIs** on
+your OAuth client. For the default local run (`http://127.0.0.1:8001`), add
+both of these on the OAuth client in Google Cloud Console → **APIs & Services
+→ Credentials**:
+
+- Authorized redirect URI: `http://127.0.0.1:8001/auth-complete.html`
+- Authorized JavaScript origin: `http://127.0.0.1:8001`
+
+Match the port you actually run on, and note that Google treats `localhost`
+and `127.0.0.1` as different values — use whichever one is actually in your
+browser's address bar. `install.py` shows this same hint next to the Google
+fields, and the in-app Settings console shows it computed from the page's
+actual origin.
+
 ---
 
 ## 4. Run it

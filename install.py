@@ -148,6 +148,22 @@ def _chat_probe(url: str, headers: dict, model: str) -> tuple[int, dict]:
     return _post_json(url, headers, payload)
 
 
+def _quota_exhausted(payload: dict) -> bool:
+    """True when a 429 means "no billing credits", not "slow down".
+
+    OpenAI and OpenRouter both reuse HTTP 429 for genuine rate limiting
+    *and* for an empty/unfunded account; those need completely different
+    advice, so the error body's code/type has to be inspected rather than
+    just the status code.
+    """
+    err = payload.get("error") or {}
+    code = str(err.get("code") or "").lower()
+    err_type = str(err.get("type") or "").lower()
+    message = str(err.get("message") or "").lower()
+    needles = ("insufficient_quota", "credit_balance_exhausted", "billing_not_active", "no credits")
+    return any(n in code or n in err_type or n in message for n in needles)
+
+
 def verify_openai(key: str) -> tuple[str, str]:
     # The model Da RoastBox actually falls back to on OpenAI, not just any model.
     model = _configured_model("ROAST_OPENAI_FREE_MODEL", "gpt-4o-mini")
@@ -164,6 +180,10 @@ def verify_openai(key: str) -> tuple[str, str]:
     if status == 401:
         return "bad", "OpenAI rejected this key (401 Unauthorized)."
     if status == 429:
+        if _quota_exhausted(payload):
+            return "warn", ("Valid key, but this OpenAI account has no billing credits. Add credits at "
+                             "platform.openai.com/settings/organization/billing, or skip OpenAI and rely on "
+                             "OpenRouter (jokes) + ElevenLabs (voice) instead.")
         return "warn", f"Valid-looking key, but OpenAI rate-limited the test call to {model} - try again shortly."
     if status == 404:
         return "warn", f"OpenAI accepted the key but rejected model '{model}' (404). Check ROAST_OPENAI_FREE_MODEL."
@@ -205,6 +225,9 @@ def verify_openrouter(key: str) -> tuple[str, str]:
                         f"returned HTTP {v_status}{(': ' + err) if err else ''}. Jokes will work; photos may not.")
     status, payload, model = results["writer"]
     if status == 429:
+        if _quota_exhausted(payload):
+            return "warn", ("Valid key, but this OpenRouter account has no credits. Add credits at "
+                             "openrouter.ai/settings/credits, or pick a free (':free'-suffixed) model.")
         return "warn", f"Valid-looking key, but OpenRouter rate-limited the test call to {model} - try again shortly."
     err = (payload.get("error") or {}).get("message", "")
     return "warn", f"OpenRouter returned HTTP {status} for {model}{(': ' + err) if err else ''}; could not confirm."
@@ -418,6 +441,23 @@ class App:
             row.set_value(existing.get(key, ""))
             self.rows.append(row)
             row_index += 2
+            if key == "GOOGLE_CLIENT_SECRET":
+                # The single most common Google sign-in failure (Error 400:
+                # redirect_uri_mismatch) is simply never adding this exact
+                # URI in Google Cloud Console. Verify can't catch it - Google
+                # only checks the redirect_uri during the real sign-in
+                # request, not this key check - so spell it out up front.
+                port = (existing.get("PORT") or "8001").strip() or "8001"
+                hint = (
+                    f"In Google Cloud Console \u2192 Credentials \u2192 this OAuth client, add under "
+                    f"\"Authorized redirect URIs\":  http://127.0.0.1:{port}/auth-complete.html\n"
+                    f"and under \"Authorized JavaScript origins\":  http://127.0.0.1:{port}\n"
+                    f"(must match the address bar exactly, including the port - \"localhost\" and "
+                    f"\"127.0.0.1\" are NOT interchangeable to Google)."
+                )
+                ttk.Label(body, text=hint, wraplength=680, justify="left", foreground="#555") \
+                    .grid(row=row_index, column=0, columnspan=5, sticky="w", pady=(0, 8))
+                row_index += 1
 
         ttk.Separator(body, orient="horizontal").grid(
             row=row_index, column=0, columnspan=5, sticky="we", pady=10)
