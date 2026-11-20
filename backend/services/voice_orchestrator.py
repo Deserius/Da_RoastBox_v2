@@ -113,7 +113,9 @@ async def synthesize_line(text: str, persona_id: str, persona_meta: Optional[dic
     if eleven_key:
         try:
             tag = ELEVEN_TAGS.get((beat or {}).get("emotion") or "", "")
-            audio = await synthesize_tts_elevenlabs(eleven_key, f"{tag} {text}".strip(), meta.get("elevenlabs"))
+            audio = await synthesize_tts_elevenlabs(
+                eleven_key, f"{tag} {text}".strip(), meta.get("elevenlabs"),
+                persona_id=persona_id or meta.get("id"))
             provider = "elevenlabs"
         except Exception as e:
             log.warning("ElevenLabs synth failed (%s); falling back to OpenAI TTS.", e)
@@ -126,7 +128,7 @@ async def synthesize_line(text: str, persona_id: str, persona_meta: Optional[dic
             byok_key=user_openai_key, instructions=acting_instructions(meta, beat),
         )
         provider = "openai"
-    key = _cache_key(text, str(meta.get("tts_voice_hd") or meta.get("tts_voice") or "ash"),
+    key = _cache_key(text, f"{persona_id or meta.get('id')}:{meta.get('tts_voice_hd') or meta.get('tts_voice') or 'ash'}",
                      acting_instructions(meta, beat), provider)
     cached = _cache_get(key)
     if cached:

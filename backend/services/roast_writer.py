@@ -31,15 +31,35 @@ from openai import OpenAI, APITimeoutError, RateLimitError
 
 log = logging.getLogger(__name__)
 
-BEAT_TYPES = {"intro", "joke", "punchline", "tag", "callback", "crowd_work", "closer"}
-LAUGH_LEVELS = {"none", "small", "medium", "big", "explosive"}
+BEAT_TYPES = {"intro", "joke", "punchline", "reaction", "tag", "callback", "crowd_work", "closer"}
+# Crowd reactions the writer may mark. The first five drive the crowd
+# soundtrack's volume ladder; the rest are flavours the reference project
+# specified and are mapped onto that ladder (and onto a crowd sample) below.
+LAUGH_LEVELS = {"none", "small", "medium", "big", "explosive",
+                "shock", "gasp", "hype", "applause"}
+LAUGH_VOLUME = {"shock": "big", "gasp": "medium", "hype": "explosive", "applause": "big"}
 REACTIONS = {"laugh", "ooh", "groan", "cheer"}
+# Which crowd sample a flavour should trigger. Kept on the beat as `reaction`
+# so the existing crowd engine plays the right sound without changes.
+LAUGH_REACTION = {"shock": "ooh", "gasp": "ooh", "hype": "cheer", "applause": "cheer"}
 EMOTIONS = {"cocky", "sarcastic", "deadpan", "excited", "outraged", "whisper", "mock_sympathy",
             "disgusted", "hype", "smug", "incredulous"}
 MODEL_CHAIN = ["claude-sonnet-4-5-20250929", "gpt-4.1", "gpt-4o"]
 REFUSAL_MARKERS = ("i'm sorry", "i am sorry", "i can't help", "i cannot help", "i won't",
                    "unable to assist", "as an ai", "i can't assist", "i'm not able", "i am not able")
 
+REACTION_GUIDE = (
+    "CROWD REACTION MARKING — set laugh_after to the reaction the room actually earns, "
+    "using: none (setups, intros, connective tissue), small (light chuckle), "
+    "medium (solid real laughter), big (the room erupts), explosive (standing ovation, "
+    "biggest kill shots and the finale), shock (an \"OHHHH!\" at something savage or dark), "
+    "gasp (audible gasp at a near-the-line burn), hype (crowd hypes a roaster after a "
+    "clapback or panel challenge) or applause (often after a callback lands or a roaster "
+    "is introduced). Match the moment, never a formula: stronger punchline earns a bigger "
+    "reaction, a landed callback earns applause or big, a savage swing earns shock or gasp "
+    "first. Setups and reactions-to-jokes earn none or small. Do not make every line "
+    "explosive, and vary it — back-to-back identical reactions feel fake."
+)
 MASTER_SCAFFOLD = """MASTER WRITING SCAFFOLD — build every beat this way, privately, and never narrate the process:
 1. EVIDENCE LEDGER. From the photo observations and supplied stories, list the permitted specifics in ranked order: grooming and hair mishaps, clothing and fit choices, colors and clashes, accessories, pose and body language, expression, props, setting, and any striking contrast between them. Tag each with its image_index. Drop anything ambiguous, sensitive or inferred.
 2. QUIRK TO ANGLE. For each strong quirk write two or more angles before choosing: expectation versus reality, a precise comparison, an incongruity, a comic misreading, a reversal of status, a consequence carried to an absurd end, or a callback planted early and paid off late. Keep the first obvious idea only if it is the funniest; usually it is not.
@@ -75,6 +95,7 @@ COMEDY AND PERFORMANCE:
 - Write conversational, speakable lines with contractions, attitude, surprise and a clear payoff. Mix roomy setups, quick jabs, short tags and pauses; end punchlines strongly. No stage directions, emojis, explanations of the joke or audience instructions in the spoken text.
 - Every beat has one speaker; one beat may be a setup and punchline together or a very short tag. No stage-direction-only beats.
 - Mark laughter and reactions according to the actual beat: setups and quick tags can have none; vary the size and type of genuine punchline reactions. Do not mark every line explosive. Leave room for voices and timing.
+- """ + REACTION_GUIDE + """
 - For roast mode, the user message gives the exact turn plan and what the show adds outside your script. Follow it.
 - For battle mode, follow the battle structure in the user message; do not add an unrelated host sign-off.
 
@@ -89,9 +110,9 @@ in the core script. For battle mode the lineup_roasts object may be omitted.
 
 OUTPUT: only a valid JSON object, no markdown or extra text. Use this schema:
 {"lineup_roasts": {"selected persona ID": "one joke about this fictional comic"},
-"script": [{"persona_id": "selected persona ID", "type": "intro|joke|punchline|tag|callback|crowd_work|closer",
+"script": [{"persona_id": "selected persona ID", "type": "intro|joke|punchline|reaction|tag|callback|crowd_work|closer",
 "text": "spoken line", "emotion": "cocky|sarcastic|deadpan|excited|outraged|whisper|mock_sympathy|disgusted|hype|smug|incredulous",
-"delivery": "short acting direction", "laugh_after": "none|small|medium|big|explosive",
+"delivery": "short acting direction", "laugh_after": "none|small|medium|big|explosive|shock|gasp|hype|applause",
 "reaction": "laugh|ooh|groan|cheer", "pause_before_ms": 0, "pause_after_ms": 300, "image_index": 0,
 "standalone": true}]}
 Use standalone=true only when a beat makes sense independently of its immediately preceding beat; set it false for responses, tags, callbacks, or lines with a setup in the previous beat. This helps preserve conversational handoffs. Keep pauses between 0 and 1500 ms, match image_index to the referenced photo, and vary crowd reactions to suit the joke."""
@@ -178,6 +199,10 @@ def _style_notes(styles) -> str:
             "; ".join(f"{name}: {COMEDY_STYLES[name]}" for name in valid) + "\n")
 
 
+# The reference project exposes the dial as Light / Savage / Nuclear / Atomic.
+# Those names are accepted directly and fold onto this app's four-step heat
+# scale, so an existing client sending "mild" keeps working unchanged.
+INTENSITY_ALIASES = {"light": "mild", "savage": "hot", "nuclear": "fire", "atomic": "inferno"}
 HEAT_LEVELS = ("mild", "hot", "fire", "inferno")
 HEAT_NOTES = {
     "mild": "HEAT LEVEL 1/4 — MILD: playful, affectionate teasing. Light burns a friend would laugh at; the subject should leave smiling.",
@@ -196,7 +221,9 @@ ADULT_OFF = ("CONTENT MODE: CLEAN — adult language OFF. THIS OVERRIDES the 18+
 
 
 def normalize_heat(heat: Optional[str]) -> str:
-    return heat if heat in HEAT_LEVELS else "hot"
+    key = (heat or "").strip().lower()
+    key = INTENSITY_ALIASES.get(key, key)
+    return key if key in HEAT_LEVELS else "hot"
 
 
 def highest_unlocked_heat(inferno_unlocked: bool) -> str:
@@ -311,6 +338,11 @@ def build_roast_prompt(personas, subject_name, user_context, duration_minutes, p
         f"Vary sentence openings and joke structures; cut filler and explanations.\n"
         f"- Give replies personality: one comic can misinterpret, escalate, contradict, or outdo the previous comic. "
         f"Preserve each voice, speak conversationally, and avoid stock insults or repeating the same target detail.\n"
+        f"- LIVE PANEL IS THE POINT: a comic may cut in with a short type=\"reaction\" beat that reacts to the previous "
+        f"line (\"Oh, he came in HOT tonight—\", \"Nah, hold up, AFTER that?\"), then a following comic tops it. "
+        f"Use reaction beats sparingly so they punch rather than pad, and never let one comic deliver a block of turns.\n"
+        f"- PLANT AND PAY OFF: put one specific runner (a nickname, an embarrassing visible detail, a phrase) in the "
+        f"first third, keep it alive, and pay it off in a type=\"callback\" beat near the finale with a NEW twist.\n"
         f"- The app separately appends the host's thanks to the guest and audience and the Da RoastBox motto. "
         f"Do not include that formal thank-you or motto in your script.\n"
         f"{_uncut_line(adult, 'Roast')}"
@@ -554,14 +586,17 @@ def _beat_from_object(obj: dict, personas: List[Dict], n_images: int) -> Optiona
     if not txt:
         return None
     pid = obj.get("persona_id") or obj.get("persona") or default_pid
+    laugh, reaction, flavour = _normalize_reaction(obj.get("laugh_after"), obj.get("reaction"))
+    btype = (obj.get("type") or "joke").lower()
     return {
         "persona_id": pid if pid in ids else default_pid,
-        "type": (obj.get("type") or "joke").lower(),
+        "type": btype if btype in BEAT_TYPES else "joke",
         "text": txt,
         "emotion": (obj.get("emotion") or "cocky").lower(),
         "delivery": str(obj.get("delivery") or "")[:120],
-        "laugh_after": (obj.get("laugh_after") or "small").lower(),
-        "reaction": (obj.get("reaction") or "laugh").lower(),
+        "laugh_after": laugh,
+        "laugh_flavour": flavour,
+        "reaction": reaction,
         "pause_before_ms": _int(obj.get("pause_before_ms"), 300, 0, 2000),
         "pause_after_ms": _int(obj.get("pause_after_ms"), 300, 0, 2000),
         "image_index": _int(obj.get("image_index"), 0, 0, max(0, n_images - 1)),
@@ -873,6 +908,25 @@ def _int(v, default, lo, hi):
         return default
 
 
+def _normalize_reaction(laugh: Optional[str], reaction: Optional[str]):
+    """Return (laugh_after, reaction, flavour) for one beat.
+
+    The writer may mark the reference flavours shock/gasp/hype/applause. The
+    existing player, battle scoreboard and crowd engine only know the five-step
+    volume ladder, so `laugh_after` always carries a ladder value and the richer
+    flavour is preserved in `flavour`. `reaction` selects the crowd sample.
+    """
+    marked = (laugh or "none").strip().lower()
+    if marked not in LAUGH_LEVELS:
+        marked = "small"
+    # shock -> big, gasp -> medium, hype -> explosive, applause -> big
+    level = LAUGH_VOLUME.get(marked, marked)
+    sample = (reaction or "").strip().lower()
+    if sample not in REACTIONS:
+        sample = LAUGH_REACTION.get(marked, "laugh")
+    return level, sample, marked
+
+
 def parse_beats(text: str, personas: List[Dict], n_images: int = 1) -> List[Dict]:
     ids = {p["id"] for p in personas}
     default_pid = personas[0]["id"]
@@ -885,8 +939,7 @@ def parse_beats(text: str, personas: List[Dict], n_images: int = 1) -> List[Dict
             continue
         pid = b.get("persona_id") or b.get("persona") or default_pid
         btype = (b.get("type") or "joke").lower()
-        laugh = (b.get("laugh_after") or "none").lower()
-        reaction = (b.get("reaction") or "laugh").lower()
+        laugh, reaction, flavour = _normalize_reaction(b.get("laugh_after"), b.get("reaction"))
         emotion = (b.get("emotion") or "cocky").lower()
         out.append({
             "persona_id": pid if pid in ids else default_pid,
@@ -894,8 +947,9 @@ def parse_beats(text: str, personas: List[Dict], n_images: int = 1) -> List[Dict
             "text": txt,
             "emotion": emotion if emotion in EMOTIONS else "cocky",
             "delivery": str(b.get("delivery") or "")[:120],
-            "laugh_after": laugh if laugh in LAUGH_LEVELS else "small",
-            "reaction": reaction if reaction in REACTIONS else "laugh",
+            "laugh_after": laugh,
+            "laugh_flavour": flavour,
+            "reaction": reaction,
             "pause_before_ms": _int(b.get("pause_before_ms"), 300, 0, 2000),
             "pause_after_ms": _int(b.get("pause_after_ms"), 300, 0, 2000),
             "image_index": _int(b.get("image_index"), len(out) % max(1, n_images), 0, max(0, n_images - 1)),
@@ -904,7 +958,8 @@ def parse_beats(text: str, personas: List[Dict], n_images: int = 1) -> List[Dict
     if out and not any(x["type"] == "intro" for x in out):
         out[0]["type"] = "intro"
     if out and not any(x["type"] == "closer" for x in out):
-        out[-1].update(type="closer", laugh_after="explosive", reaction="cheer")
+        out[-1].update(type="closer", laugh_after="explosive", laugh_flavour="explosive",
+                       reaction="cheer")
     return out
 
 

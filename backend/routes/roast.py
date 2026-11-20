@@ -48,6 +48,9 @@ async def generate_roast(
     use_premium_voice: bool = Form(False),
     hd_export: bool = Form(False),
     heat: Optional[str] = Form(None),
+    # The reference project calls this "intensity" (light/savage/nuclear/atomic).
+    # Both names are accepted; normalize_heat folds them onto one scale.
+    intensity: Optional[str] = Form(None),
     adult_language: bool = Form(True),
     images: List[UploadFile] = File(default=[]),
     current_user: User = Depends(eng.locked_generation_user),
@@ -66,7 +69,7 @@ async def generate_roast(
     if len(personas) != len(ids):
         raise HTTPException(status_code=400, detail="Unknown personas")
     uses_premium_persona = eng.check_persona_access(current_user, personas)
-    heat = normalize_heat(heat) if heat is not None else highest_unlocked_heat(
+    heat = normalize_heat(heat if heat is not None else intensity) if (heat is not None or intensity is not None) else highest_unlocked_heat(
         current_user.nsfw_edgier_unlocked or current_user.lifetime_founder)
     eng.check_heat_access(current_user, heat)
     if use_premium_voice and not eng.has_premium_voices(current_user):
