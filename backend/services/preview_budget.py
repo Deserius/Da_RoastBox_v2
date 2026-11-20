@@ -25,6 +25,10 @@ async def consume_preview_hosted(kind: str, *, using_own_key: bool = False) -> N
     """
     if using_own_key:
         return
+    # A dry run makes no provider call, so there is nothing to cap.
+    from config import DRY_RUN
+    if DRY_RUN:
+        return
     if not ENABLE_PREVIEW_LOGIN or not ALLOW_PREVIEW_HOSTED_AI:
         raise HTTPException(status_code=503, detail="Preview accounts need their own OpenAI API key in Settings; hosted AI is disabled for this preview.")
     # Module constants remain primary (tests and deploy-time config patch these);

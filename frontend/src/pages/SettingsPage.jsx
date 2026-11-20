@@ -71,6 +71,18 @@ export default function SettingsPage() {
         </p>
 
         <div className="divider" />
+        {services?.dry_run && (
+          <div data-testid="dry-run-banner" role="status"
+               style={{ border: "1px solid #fbbf24", borderRadius: 8, padding: "10px 12px",
+                        marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
+            <strong>Demo mode is on.</strong> This workspace cannot reach OpenAI,
+            OpenRouter, Stripe or Google (outbound TLS is blocked here), so roasts are
+            written and voiced by a local stand-in. Casting, cost, credits, history,
+            playback and sharing all work normally, and the audio is a quiet tone
+            rather than real speech. Your saved keys are untouched and will be used
+            the moment this runs somewhere with network access.
+          </div>
+        )}
         <ProviderConsole />
 
         <div className="divider" />

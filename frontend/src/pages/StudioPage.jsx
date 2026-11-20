@@ -133,7 +133,20 @@ export default function StudioPage() {
     if (comedyStyles.length) fd.append("comedy_styles", JSON.stringify(comedyStyles));
     images.forEach((im) => fd.append("images", im.file));
     try {
-      const { data } = await api.post("/roast/generate", fd, { timeout: 240000 });
+      // The show is built by a background job: writing the script and voicing
+      // every beat outlives the proxy's origin timeout, which surfaced as a
+      // Cloudflare "invalid or incomplete response" error. Start it, then poll.
+      const { data: started } = await api.post("/roast/generate", fd, { timeout: 60000 });
+      let data = null;
+      const deadline = Date.now() + 10 * 60 * 1000;
+      let delay = 700;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(3000, Math.round(delay * 1.3));
+        const poll = await api.get(`/roast/jobs/${started.job_id}`, { timeout: 20000 });
+        if (poll.data?.status === "done") { data = poll.data; break; }
+      }
+      if (!data) throw new Error("The show is taking unusually long. Check Recent shows before retrying.");
       setResult({ ...data, hd: hdExport, subjectName: subjectName.trim(), personaIds: data.persona_ids || selected });
       setTheater(true);
       setReloadHistory((n) => n + 1);

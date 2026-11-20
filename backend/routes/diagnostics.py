@@ -135,6 +135,7 @@ async def diagnostics(deep: bool = False, user: Optional[User] = Depends(get_opt
     from services.runtime_settings import setting_cached as _setting_cached
 
     writer_provider = _setting_cached("ROAST_WRITER_PROVIDER", _WRITER_DEFAULT)
+    from config import DRY_RUN
     report = {
         "version": APP_VERSION,
         "config": {
@@ -153,6 +154,7 @@ async def diagnostics(deep: bool = False, user: Optional[User] = Depends(get_opt
             "preview_unlimited_credits": PREVIEW_UNLIMITED_CREDITS,
             "storage_backend": STORAGE_BACKEND,
             "stripe_webhook_secret": bool(stripe_hook),
+            "dry_run": DRY_RUN,
             "runtime_settings_enabled": bool(ALLOW_RUNTIME_SETTINGS),
             "audio_cache_writable": AUDIO_DIR.exists(),
         },

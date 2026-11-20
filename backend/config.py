@@ -132,6 +132,11 @@ ALLOW_DEV_LOGIN = _flag("ALLOW_DEV_LOGIN")
 ENABLE_PREVIEW_LOGIN = _flag("ENABLE_PREVIEW_LOGIN")
 # Off by default: only enable in a disposable, cost-capped workspace preview.
 ALLOW_PREVIEW_HOSTED_AI = _flag("ALLOW_PREVIEW_HOSTED_AI")
+# Offline demo provider. This workspace cannot complete TLS to any provider, so
+# real generations fail with a connection error regardless of key validity.
+# Enabling this generates scripts and audio locally so the app can be exercised
+# end to end. Refused in production by the runtime guard.
+DRY_RUN = _flag("ROASTBOX_DRY_RUN")
 # Counted per UTC day across all preview accounts. -1 means unlimited: usage is
 # still recorded for visibility, but nothing is blocked. 0 keeps them disabled.
 PREVIEW_HOSTED_DAILY_SHOW_LIMIT = int(os.environ.get("PREVIEW_HOSTED_DAILY_SHOW_LIMIT", "5") or 5)

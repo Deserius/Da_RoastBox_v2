@@ -68,11 +68,42 @@ class _FakeCompletions:
 
 
 def _generate(client, headers):
-    return client.post("/api/roast/generate", headers=headers,
-                       data={"persona_ids": "persona_1", "subject_name": "Test",
-                             "duration_minutes": "3", "roast_tier": "standard",
-                             "adult_language": "false"},
-                       files=[("images", ("s.png", io.BytesIO(PNG), "image/png"))])
+    """Start a show and poll until it settles, like the browser does."""
+    import time
+
+    started = client.post("/api/roast/generate", headers=headers,
+                          data={"persona_ids": "persona_1", "subject_name": "Test",
+                                "duration_minutes": "3", "roast_tier": "standard",
+                                "adult_language": "false"},
+                          files=[("images", ("s.png", io.BytesIO(PNG), "image/png"))])
+    if started.status_code != 200:
+        return started
+    # The POST must not block on the show: that is what tripped the proxy.
+    check("generate returns immediately with a job id",
+          bool(started.json().get("job_id")) and started.json().get("status") == "running",
+          str(started.json())[:160])
+    job_id = started.json()["job_id"]
+    deadline = time.time() + 120
+    last = None
+    while time.time() < deadline:
+        last = client.get(f"/api/roast/jobs/{job_id}", headers=headers)
+        if last.status_code != 200 or last.json().get("status") != "running":
+            return last
+        time.sleep(0.05)
+    return last
+
+
+def _other_user_cannot_read(client, headers):
+    """A job id is a capability: it must not be readable by another account."""
+    started = client.post("/api/roast/generate", headers=headers,
+                          data={"persona_ids": "persona_1", "duration_minutes": "3"},
+                          files=[("images", ("s.png", io.BytesIO(PNG), "image/png"))])
+    if started.status_code != 200:
+        return True  # nothing to leak if the job was refused
+    job_id = started.json()["job_id"]
+    other = client.post("/api/auth/preview-login").json()
+    oh = {"Authorization": f"Bearer {other['session_token']}"}
+    return client.get(f"/api/roast/jobs/{job_id}", headers=oh).status_code == 404
 
 
 def main():
@@ -102,6 +133,7 @@ def main():
         body = resp.json()
         # The endpoint returns a rendered transcript, not raw beats.
         check("a transcript was produced", len(body.get("transcript", [])) > 0, str(body)[:200])
+        check("job results are private to their owner", _other_user_cannot_read(client, headers))
         check("the roast is addressable", bool(body.get("roast_id")))
         check("the personal key reached the provider", len(fake.calls) >= 1)
 

@@ -52,6 +52,11 @@ async def generate_roast(
     images: List[UploadFile] = File(default=[]),
     current_user: User = Depends(eng.locked_generation_user),
 ):
+    """Validate cheaply, then hand the slow work to a background job.
+
+    Writing a script and voicing 10-24 beats takes far longer than a proxy will
+    hold a request open, so the client polls GET /roast/jobs/{id} instead.
+    """
     ids = [p.strip() for p in persona_ids.split(",") if p.strip()]
     if not ids:
         raise HTTPException(status_code=400, detail="Select at least one roaster")
@@ -76,9 +81,6 @@ async def generate_roast(
     free = (roast_tier == "standard" and not use_premium_voice and not uses_premium_persona and not hd_export
             and current_user.last_free_roast_date != eng.today_utc())
     if current_user.is_preview and PREVIEW_UNLIMITED_CREDITS:
-        # Preview accounts cannot purchase credits, so generation is not credit
-        # limited. It is billed at zero rather than as the daily free roast, so
-        # the once-per-day allowance is not consumed and nothing is capped.
         free, cost = False, 0
     if free:
         cost = 0
@@ -90,10 +92,63 @@ async def generate_roast(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
+    # Reading and resizing the photos is fast, and doing it here means an invalid
+    # upload is rejected immediately instead of failing minutes into a job.
     img_bytes, img_types = await eng.read_images(images)
+
+    job = eng.new_generation_job(current_user.id)
+    asyncio.create_task(_generation_job(
+        job["id"], current_user=current_user, personas=personas, ids=ids,
+        img_bytes=img_bytes, img_types=img_types, subject_name=subject_name,
+        user_context=user_context, off_limits=off_limits, styles=styles, heat=heat,
+        adult_language=adult_language, duration_minutes=duration_minutes,
+        roast_tier=roast_tier, use_premium_voice=use_premium_voice, hd_export=hd_export,
+        cost=cost, free=free, uses_premium_persona=uses_premium_persona))
+    return {"job_id": job["id"], "status": "running"}
+
+
+async def _generation_job(job_id: str, **kwargs) -> None:
+    """Run a generation off the request path and record the outcome."""
+    try:
+        result = await _run_generation(**kwargs)
+        eng.finish_generation_job(job_id, result=result)
+    except HTTPException as exc:
+        eng.finish_generation_job(job_id, error={"status": exc.status_code, "detail": exc.detail})
+    except Exception:  # noqa: BLE001 - the poll endpoint must always answer
+        log.exception("Background roast generation failed")
+        exc = eng.friendly_ai_error(Exception("generation failed"))
+        eng.finish_generation_job(job_id, error={"status": exc.status_code, "detail": exc.detail})
+
+
+@router.get("/jobs/{job_id}")
+async def generation_job_status(job_id: str, current_user: User = Depends(get_current_user)):
+    """Poll a generation. Returns 200 while running; the result once finished."""
+    job = eng.get_generation_job(job_id, current_user.id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown or expired generation. Please try again.")
+    if job["status"] == "running":
+        return {"status": "running"}
+    if job["status"] == "failed":
+        err = job.get("error") or {}
+        raise HTTPException(status_code=err.get("status", 502),
+                            detail=err.get("detail") or "Roast generation failed. Please try again.")
+    return {"status": "done", **(job.get("result") or {})}
+
+
+async def _run_generation(*, current_user: User, personas: List[dict], ids: List[str],
+                          img_bytes: List[bytes], img_types: List[str],
+                          subject_name, user_context, off_limits, styles, heat,
+                          adult_language: bool, duration_minutes: int, roast_tier: str,
+                          use_premium_voice: bool, hd_export: bool, cost: int, free: bool,
+                          uses_premium_persona: bool) -> dict:
+    """The expensive half of a roast: script writing, voice, and the ledger write.
+
+    Extracted so it can run outside the request/response cycle. A full show is an
+    LLM call plus one TTS call per beat, which routinely exceeds the proxy's
+    origin timeout; keeping it inside the request made Cloudflare report an
+    invalid/incomplete upstream response.
+    """
     byok_openai, byok_eleven = eng.user_byok(current_user)
-    # A preview account spending its own OpenAI key consumes no shared budget,
-    # so it is metered only when the hosted credentials will actually be used.
     writer_provider = setting_cached("ROAST_WRITER_PROVIDER", ROAST_WRITER_PROVIDER)
     if current_user.is_preview and (not byok_openai or writer_provider == "openrouter"):
         await consume_preview_hosted("show", using_own_key=bool(byok_openai))

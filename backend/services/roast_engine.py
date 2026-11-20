@@ -2,8 +2,10 @@
 import asyncio
 import io
 import logging
+import time
+import secrets
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from fastapi import Depends, HTTPException, UploadFile
@@ -91,6 +93,48 @@ async def locked_generation_user(current_user: User = Depends(get_current_user))
         await users_collection.update_one(
             {"id": current_user.id, "generation_lease.id": lease_id}, {"$unset": {"generation_lease": ""}},
         )
+
+
+# ---- Generation jobs -------------------------------------------------------
+# A show takes far longer than a proxy will hold a request open, so the route
+# returns an id immediately and the client polls. Jobs live in process memory:
+# losing them on restart is acceptable because nothing has been charged yet, and
+# the client reports "try again" rather than a false success.
+GENERATION_JOBS: Dict[str, dict] = {}
+JOB_TTL_SECONDS = 60 * 30
+JOB_MAX = 200
+
+
+def new_generation_job(user_id: str) -> dict:
+    """Register a pending job, pruning expired entries as a side effect."""
+    now = time.time()
+    for jid, job in list(GENERATION_JOBS.items()):
+        if now - job.get("created", now) > JOB_TTL_SECONDS:
+            GENERATION_JOBS.pop(jid, None)
+    while len(GENERATION_JOBS) >= JOB_MAX:
+        GENERATION_JOBS.pop(next(iter(GENERATION_JOBS)), None)
+    job = {"id": secrets.token_urlsafe(16), "user_id": user_id, "status": "running",
+           "created": now, "result": None, "error": None}
+    GENERATION_JOBS[job["id"]] = job
+    return job
+
+
+def finish_generation_job(job_id: str, *, result: Optional[dict] = None,
+                          error: Optional[dict] = None) -> None:
+    job = GENERATION_JOBS.get(job_id)
+    if not job:
+        return
+    job["status"] = "done" if result is not None else "failed"
+    job["result"] = result
+    job["error"] = error
+
+
+def get_generation_job(job_id: str, user_id: str) -> Optional[dict]:
+    job = GENERATION_JOBS.get(job_id)
+    # A job id is a bearer capability; never serve someone else's result.
+    if not job or job["user_id"] != user_id:
+        return None
+    return job
 
 
 def user_byok(user: User) -> Tuple[Optional[str], Optional[str]]:

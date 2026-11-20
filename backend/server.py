@@ -10,6 +10,7 @@ from typing import Optional
 from starlette.middleware.cors import CORSMiddleware
 
 from config import APP_VERSION, CORS_ORIGINS
+import config
 from runtime_security import enforce_runtime, RequestSecurityMiddleware
 
 RUNTIME_SECURITY = enforce_runtime(os.environ)
@@ -128,6 +129,9 @@ async def _startup():
     # Load any console-entered credentials so synchronous provider paths see
     # them on the very first request rather than after the first write.
     await runtime_settings_service.hydrate()
+    if config.DRY_RUN:
+        from services.dry_run import install as install_dry_run
+        install_dry_run()
     storage_ready = await init_storage()
     if RUNTIME_SECURITY.release_mode and not storage_ready:
         raise RuntimeError("Durable media storage is unavailable; release startup refused")
