@@ -17,7 +17,7 @@ DB_NAME = os.environ["DB_NAME"]
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 # Optional direct hosted OpenAI alternative; the original Emergent gateway takes precedence.
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-AI_DEFAULT_PROVIDER = os.environ.get("AI_DEFAULT_PROVIDER", "emergent").strip().lower()
+AI_DEFAULT_PROVIDER = os.environ.get("AI_DEFAULT_PROVIDER", "openai").strip().lower()
 if AI_DEFAULT_PROVIDER not in ("openai", "emergent"):
     raise ValueError("AI_DEFAULT_PROVIDER must be openai or emergent")
 # The default writer is a single multimodal OpenRouter call (photos + jokes).
@@ -38,7 +38,7 @@ ROAST_OPENROUTER_MODELS = tuple(dict.fromkeys(v.strip() for v in os.environ.get(
 if not ROAST_OPENROUTER_MODELS or len(ROAST_OPENROUTER_MODELS) > 6:
     raise ValueError("Configure one to six OpenRouter writer models")
 ROAST_BACKUP_PROVIDERS = tuple(dict.fromkeys(v.strip().lower() for v in os.environ.get(
-    "ROAST_BACKUP_PROVIDERS", "emergent,openai").split(",") if v.strip()))
+    "ROAST_BACKUP_PROVIDERS", "openai").split(",") if v.strip()))
 if any(v not in ("emergent", "openai") for v in ROAST_BACKUP_PROVIDERS):
     raise ValueError("ROAST_BACKUP_PROVIDERS supports emergent,openai only")
 ROAST_PAID_PRIMARY_MODEL = os.environ.get("ROAST_PAID_PRIMARY_MODEL", "thedrummer/cydonia-24b-v4.1").strip()
@@ -168,7 +168,7 @@ RUNTIME_SETTINGS_ADMINS = tuple(
     for value in os.environ.get("RUNTIME_SETTINGS_ADMINS", "").split(",")
     if value.strip()
 )
-STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "emergent").strip().lower()
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local").strip().lower()
 if STORAGE_BACKEND not in ("emergent", "local", "vercel_blob"):
     raise ValueError("STORAGE_BACKEND must be emergent, local or vercel_blob")
 # Production can point this at a persistent disk; the default preserves the

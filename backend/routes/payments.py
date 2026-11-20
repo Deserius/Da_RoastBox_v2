@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
-from emergentintegrations.payments.stripe.checkout import (
+from services.stripe_checkout import (
     StripeCheckout, CheckoutSessionRequest
 )
 

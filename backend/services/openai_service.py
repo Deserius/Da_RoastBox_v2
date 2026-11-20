@@ -1,4 +1,9 @@
-"""OpenAI-compatible client (Emergent gateway or BYOK) + expressive TTS."""
+"""OpenAI-compatible client (direct OpenAI or BYOK) + expressive TTS.
+
+Direct OpenAI is the default. The legacy Emergent LLM gateway is only used when
+AI_DEFAULT_PROVIDER is explicitly "emergent" *and* a gateway key is present, so a
+stock install never needs the Emergent platform.
+"""
 import asyncio
 import logging
 from typing import Optional
@@ -22,17 +27,27 @@ def get_client(byok_key: Optional[str] = None, timeout: float = 90.0) -> OpenAI:
     emergent_key = EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
     if byok_key:
         return OpenAI(api_key=byok_key, timeout=timeout, max_retries=1)
-    if AI_DEFAULT_PROVIDER == "openai" and openai_key:
+    # Direct OpenAI first: it is the supported path and needs no vendor gateway.
+    if openai_key and AI_DEFAULT_PROVIDER != "emergent":
         return OpenAI(api_key=openai_key, timeout=timeout, max_retries=1)
-    if emergent_key:
+    # Legacy gateway, only when the operator opted in and a key exists.
+    if emergent_key and AI_DEFAULT_PROVIDER == "emergent":
         return OpenAI(api_key=emergent_key, base_url=_GATEWAY_URL, timeout=timeout, max_retries=1)
     if openai_key:
         return OpenAI(api_key=openai_key, timeout=timeout, max_retries=1)
-    raise RuntimeError("No AI provider key configured. Add an OpenAI key in Settings or configure EMERGENT_LLM_KEY or OPENAI_API_KEY.")
+    raise RuntimeError(
+        "No AI provider key configured. Add an OpenAI key in Settings "
+        "(passphrase console) or set OPENAI_API_KEY in backend/.env."
+    )
 
 
 def get_emergent_client(timeout: float = 90.0) -> OpenAI:
-    """Explicit hosted fallback; never send a user's BYOK to this endpoint."""
+    """Explicit hosted fallback; never send a user's BYOK to this endpoint.
+
+    Optional. Only reachable when AI_DEFAULT_PROVIDER is "emergent" and an
+    EMERGENT_LLM_KEY is configured; otherwise this raises and callers fall
+    through to the next provider.
+    """
     emergent_key = EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
     if not emergent_key:
         raise RuntimeError("Emergent backup is not configured")

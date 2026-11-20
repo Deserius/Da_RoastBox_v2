@@ -121,7 +121,24 @@ npm install -g yarn
 
 ## 4. Run it
 
-Two terminals.
+**Easiest — one click.** Double-click **`RUN.bat`** (Windows) or run **`./run.sh`**.
+It checks Python, packages, `.env`, the port and the database, fixes what it can,
+starts the API and the frontend, and opens your default browser.
+
+It prints a specific message instead of a traceback if something is missing:
+
+```
+  [ok]   Python 3.11.2
+  [ok]   All 11 required packages import
+  [ok]   backend/.env found
+  [ok]   JWT_SECRET present
+  [ok]   Port 8001 is free
+  [ok]   MongoDB is reachable on 127.0.0.1:27017
+```
+
+Diagnose without starting anything: `cd backend && ..\.venv\Scripts\python run_server.py --check`
+
+**Or start it by hand** — two terminals.
 
 **Terminal 1 — backend**
 
@@ -227,6 +244,8 @@ preview logins, dry-run mode and the runtime settings console in production.
 
 | Symptom | Cause and fix |
 |---|---|
+| `ModuleNotFoundError: No module named 'emergentintegrations'` | Fixed in this build — payments now call Stripe directly. If you see it, you are on an older download: update `backend/services/stripe_checkout.py` and `backend/routes/payments.py`. |
+| `ModuleNotFoundError` for anything else | A package is missing: `cd backend && ..\.venv\Scripts\python -m pip install -r requirements.txt` |
 | `ENOENT` / `getaddrinfo assets.emergent.sh` during install | `install.sh`/`install.bat` ran instead of `setup.sh`/`setup.bat`. Use the setup scripts, or delete the two `@emergentbase/*` devDependencies lines from `frontend/package.json` first. |
 | `yarn install` fails: "Client network socket disconnected before secure TLS connection was established" | Your network cannot reach `registry.yarnpkg.com`. The setup scripts rewrite the lockfile to `registry.npmjs.org` automatically; if you install by hand, run `python scripts/fix_lockfile_registry.py frontend/yarn.lock`. |
 | `MODULE_NOT_FOUND` in `terser-webpack-plugin` / `ajv-keywords` | The frontend was installed with **npm**. npm ignores the repo's yarn-only `resolutions` field and resolves a tree that will not build. Delete `frontend/node_modules` and reinstall with yarn. |
@@ -242,6 +261,10 @@ preview logins, dry-run mode and the runtime settings console in production.
 ## 10. Project layout
 
 ```
+RUN.bat / run.sh    one-click launcher: checks, fixes, starts, opens the browser
+backend/
+  run_server.py     the launcher behind RUN.bat (diagnoses, then serves)
+  services/stripe_checkout.py   Stripe via the official SDK, no vendor wrapper
 backend/            FastAPI app
   routes/           13 routers (roast, auth, payments, settings, …)
   services/         pipeline: roast_writer, voice_orchestrator, dry_run, …
