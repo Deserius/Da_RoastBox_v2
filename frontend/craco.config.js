@@ -117,7 +117,7 @@ let webpackConfig = {
       // Versioned on purpose: a fixed bundle name is cached hard by browsers and
       // proxies, which silently serves stale code after a change. Bump this
       // whenever the shell must be re-fetched.
-      if (isDevServer) webpackConfig.output.filename = "static/js/bundle-workspace-v6.js";
+      if (isDevServer) webpackConfig.output.filename = "static/js/bundle-workspace-v7.js";
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {

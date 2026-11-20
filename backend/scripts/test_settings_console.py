@@ -100,15 +100,19 @@ def _run():
         client.post("/api/settings/console/lock", headers=ph)
         check("locking works", client.get("/api/settings/console", headers=ph).json()["unlocked"] is False)
 
-        # A real (non-preview) account must be refused even with the passphrase.
-        # ENABLE_PREVIEW_LOGIN must never be read as "every account is an operator".
+        # The passphrase is the gate, not the account type: an owner signing in
+        # normally must be able to configure their own deployment. (Gating on
+        # preview-only previously 403'd the very person entitled to do this.)
         real = client.post("/api/auth/dev-login", json={"email": "real@customer.test", "name": "Real"}).json()
         rh = {"Authorization": f"Bearer {real['session_token']}"}
-        check("non-preview account cannot read the console",
-              client.get("/api/settings/console", headers=rh).status_code == 403)
-        check("non-preview account cannot unlock",
+        check("a normal signed-in owner can read the console",
+              client.get("/api/settings/console", headers=rh).status_code == 200)
+        check("a normal signed-in owner can unlock with the passphrase",
               client.post("/api/settings/console/unlock", json={"passphrase": "test-passphrase"},
-                          headers=rh).status_code == 403)
+                          headers=rh).status_code == 200)
+        check("a wrong passphrase is still refused",
+              client.post("/api/settings/console/unlock", json={"passphrase": "nope"},
+                          headers=rh).status_code == 401)
 
         check("anonymous access is refused", client.get("/api/settings/console").status_code == 401)
 

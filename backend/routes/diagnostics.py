@@ -117,12 +117,24 @@ async def diagnostics(deep: bool = False, user: Optional[User] = Depends(get_opt
         raise HTTPException(status_code=403, detail="Live provider diagnostics are disabled for preview accounts.")
     # Report what is actually in effect, including keys entered in the settings
     # console, so the UI never claims a provider is missing when it is usable.
-    emergent_key = secret_cached("EMERGENT_LLM_KEY")
-    openai_key = secret_cached("OPENAI_API_KEY")
-    stripe_key = secret_cached("STRIPE_API_KEY")
-    stripe_hook = secret_cached("STRIPE_WEBHOOK_SECRET")
-    eleven_key = secret_cached("ELEVENLABS_API_KEY")
-    openrouter_key = secret_cached("OPENROUTER_API_KEY")
+    # Environment values and console-saved values are both "configured"; reading
+    # only the console store reported a key as missing while it was in the
+    # environment, which sent operators chasing a phantom problem.
+    from config import (ELEVENLABS_API_KEY, EMERGENT_LLM_KEY, OPENAI_API_KEY,
+                        OPENROUTER_API_KEY, STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET)
+
+    emergent_key = EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
+    openai_key = OPENAI_API_KEY or secret_cached("OPENAI_API_KEY")
+    stripe_key = STRIPE_API_KEY or secret_cached("STRIPE_API_KEY")
+    stripe_hook = STRIPE_WEBHOOK_SECRET or secret_cached("STRIPE_WEBHOOK_SECRET")
+    eleven_key = ELEVENLABS_API_KEY or secret_cached("ELEVENLABS_API_KEY")
+    openrouter_key = OPENROUTER_API_KEY or secret_cached("OPENROUTER_API_KEY")
+    # Which writer will actually run matters more than which keys exist, because
+    # a missing OpenRouter key silently falls back to the OpenAI/Emergent path.
+    from config import ROAST_WRITER_PROVIDER as _WRITER_DEFAULT
+    from services.runtime_settings import setting_cached as _setting_cached
+
+    writer_provider = _setting_cached("ROAST_WRITER_PROVIDER", _WRITER_DEFAULT)
     report = {
         "version": APP_VERSION,
         "config": {
@@ -135,6 +147,7 @@ async def diagnostics(deep: bool = False, user: Optional[User] = Depends(get_opt
             "source_download_enabled": ALLOW_SOURCE_DOWNLOAD,
             "preview_login_enabled": ENABLE_PREVIEW_LOGIN,
             "preview_hosted_ai_enabled": ENABLE_PREVIEW_LOGIN and ALLOW_PREVIEW_HOSTED_AI and bool(emergent_key or openai_key or openrouter_key),
+            "roast_writer_provider": writer_provider,
             "preview_hosted_daily_show_limit": "unlimited" if PREVIEW_HOSTED_DAILY_SHOW_LIMIT < 0 else PREVIEW_HOSTED_DAILY_SHOW_LIMIT,
             "preview_hosted_daily_voice_limit": "unlimited" if PREVIEW_HOSTED_DAILY_VOICE_LIMIT < 0 else PREVIEW_HOSTED_DAILY_VOICE_LIMIT,
             "preview_unlimited_credits": PREVIEW_UNLIMITED_CREDITS,

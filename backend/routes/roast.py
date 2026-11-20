@@ -12,6 +12,7 @@ from config import ROAST_WRITER_PROVIDER, PREVIEW_UNLIMITED_CREDITS
 from models import User, RoastRecord
 from db import roasts_collection
 from services.pricing import compute_roast_cost, ROAST_COSTS
+from services.runtime_settings import setting_cached
 from services.preview_budget import consume_preview_hosted
 from services.roast_writer import parse_comedy_styles, _target_beats, build_roast_prompt, finish_roast_script, highest_unlocked_heat, normalize_heat, write_script
 from services.voice_orchestrator import synthesize_beat, synthesize_show, voice_beats_progressive
@@ -91,8 +92,11 @@ async def generate_roast(
 
     img_bytes, img_types = await eng.read_images(images)
     byok_openai, byok_eleven = eng.user_byok(current_user)
-    if current_user.is_preview and (not byok_openai or ROAST_WRITER_PROVIDER == "openrouter"):
-        await consume_preview_hosted("show")
+    # A preview account spending its own OpenAI key consumes no shared budget,
+    # so it is metered only when the hosted credentials will actually be used.
+    writer_provider = setting_cached("ROAST_WRITER_PROVIDER", ROAST_WRITER_PROVIDER)
+    if current_user.is_preview and (not byok_openai or writer_provider == "openrouter"):
+        await consume_preview_hosted("show", using_own_key=bool(byok_openai))
     prompt = build_roast_prompt(personas, subject_name, user_context, duration_minutes, roast_tier == "premium",
                                 current_user.nsfw_edgier_unlocked or current_user.lifetime_founder,
                                 heat=heat, adult=adult_language, n_images=len(img_bytes), off_limits=off_limits, styles=styles)

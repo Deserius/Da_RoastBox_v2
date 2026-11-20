@@ -101,7 +101,7 @@ export default function ProviderConsole() {
   const [state, setState] = useState(null);
   const [stateError, setStateError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
-  const [gate, setGate] = useState(null); // "disabled" | "not-preview" | null
+  const [gate, setGate] = useState(null); // "disabled" | "not-operator" | null
   const [passphrase, setPassphrase] = useState("");
   const [drafts, setDrafts] = useState({});
   const [results, setResults] = useState({});
@@ -130,8 +130,8 @@ export default function ProviderConsole() {
         setUnavailable(true);
         setGate("disabled");
       } else if (status === 403) {
-        // Signed in, but not with a disposable preview account.
-        setGate("not-preview");
+        // Only reachable when RUNTIME_SETTINGS_ADMINS narrows access.
+        setGate("not-operator");
         setStateError("");
         setUnavailable(false);
         setState({ enabled: true, unlocked: false });
@@ -240,18 +240,14 @@ export default function ProviderConsole() {
     } finally { setBusy(false); }
   };
 
-  if (gate === "not-preview" && !state?.unlocked) {
+  if (gate === "not-operator" && !state?.unlocked) {
     return (
       <div data-testid="provider-console-gated">
         <h2>Connect your services</h2>
         <p className="text-muted" style={{ fontSize: 13 }}>
-          This panel accepts live API keys, so it is restricted to the
-          <strong> disposable preview account</strong>. You are currently signed in
-          with a different account.
-        </p>
-        <p className="text-muted" style={{ fontSize: 13 }}>
-          To configure keys: sign out, then choose <strong>Browse as guest</strong> on
-          the sign-in screen. That account has unlimited credits and can open this panel.
+          This panel is limited to specific operator accounts on this server
+          (<code>RUNTIME_SETTINGS_ADMINS</code>). Ask the owner to add your email,
+          or remove that setting to allow any signed-in account.
         </p>
       </div>
     );

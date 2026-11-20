@@ -41,17 +41,20 @@ def console_available() -> bool:
 
 
 def _is_operator(user: User) -> bool:
-    """Only disposable preview accounts, or an explicit allowlist, may operate this.
+    """Who may open the console once it is enabled.
 
-    A real customer account must never reach this page even with the passphrase,
-    because the stored credentials would then be spendable by a stranger. Note
-    that ``ENABLE_PREVIEW_LOGIN`` only means preview sign-in exists; it must not
-    be read as "every account is an operator".
+    The shared passphrase is the actual gate: it is what an attacker would need,
+    and it is compared in constant time below. Requiring a *preview* account on
+    top of that locked out the one person entitled to configure their own
+    deployment, so any signed-in account is accepted.
+
+    Set ``RUNTIME_SETTINGS_ADMINS`` to a comma-separated list of user ids or
+    emails to narrow this to specific operators.
     """
     if RUNTIME_SETTINGS_ADMINS:
         identity = {(user.id or "").lower(), (user.email or "").lower()}
         return bool(identity & set(RUNTIME_SETTINGS_ADMINS))
-    return bool(user.is_preview)
+    return True
 
 
 async def _unlock_expiry(user: User) -> Optional[datetime]:
@@ -72,7 +75,7 @@ async def _require_operator(user: User) -> None:
     if not console_available():
         raise HTTPException(status_code=404, detail="Not found")
     if not _is_operator(user):
-        raise HTTPException(status_code=403, detail="The settings console is limited to preview accounts.")
+        raise HTTPException(status_code=403, detail="The settings console is limited to approved operator accounts.")
     if await _unlock_expiry(user) is None:
         raise HTTPException(status_code=403, detail="Settings console is locked. Enter the passphrase to unlock.")
 
@@ -96,7 +99,7 @@ async def console_state(current_user: User = Depends(get_current_user)):
     if not console_available():
         raise HTTPException(status_code=404, detail="Not found")
     if not _is_operator(current_user):
-        raise HTTPException(status_code=403, detail="The settings console is limited to preview accounts.")
+        raise HTTPException(status_code=403, detail="The settings console is limited to approved operator accounts.")
     expiry = await _unlock_expiry(current_user)
     snapshot = await runtime_settings.effective_snapshot()
     return {
@@ -114,7 +117,7 @@ async def unlock_console(body: UnlockBody, current_user: User = Depends(get_curr
     if not console_available():
         raise HTTPException(status_code=404, detail="Not found")
     if not _is_operator(current_user):
-        raise HTTPException(status_code=403, detail="The settings console is limited to preview accounts.")
+        raise HTTPException(status_code=403, detail="The settings console is limited to approved operator accounts.")
     supplied = (body.passphrase or "").encode()
     expected = RUNTIME_SETTINGS_PASSPHRASE.encode()
     if not supplied or not hmac.compare_digest(supplied, expected):

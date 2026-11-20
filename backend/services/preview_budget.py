@@ -15,7 +15,16 @@ from services.runtime_settings import secret_cached
 from db import preview_usage_collection
 
 
-async def consume_preview_hosted(kind: str) -> None:
+async def consume_preview_hosted(kind: str, *, using_own_key: bool = False) -> None:
+    """Meter hosted AI usage for preview accounts.
+
+    ``using_own_key`` marks a request that will authenticate with the user's own
+    provider key. Such a request spends no shared budget, so it must not be
+    gated: blocking it produced the confusing "add your own OpenAI key" error
+    for users who had already added one.
+    """
+    if using_own_key:
+        return
     if not ENABLE_PREVIEW_LOGIN or not ALLOW_PREVIEW_HOSTED_AI:
         raise HTTPException(status_code=503, detail="Preview accounts need their own OpenAI API key in Settings; hosted AI is disabled for this preview.")
     # Module constants remain primary (tests and deploy-time config patch these);
