@@ -1,9 +1,8 @@
 @echo off
 REM Double-click this to start Da RoastBox and open it in your default browser.
-REM First run: creates a Python virtual environment and installs the backend
-REM packages (a couple of minutes). No MongoDB, Node.js, or Yarn needed - the
-REM database is built in and the frontend ships prebuilt.
-setlocal EnableExtensions EnableDelayedExpansion
+REM All first-run setup (virtual environment, package install) is handled by
+REM server.py itself - this just finds a Python interpreter and hands off to it.
+setlocal EnableExtensions
 cd /d "%~dp0"
 if errorlevel 1 (
   echo.
@@ -14,14 +13,6 @@ if errorlevel 1 (
 )
 title Da RoastBox
 
-if exist ".venv\Scripts\python.exe" goto haveenv
-
-echo.
-echo ============================================================
-echo   Da RoastBox - first-time setup
-echo ============================================================
-echo.
-echo ==^> Checking Python
 set "PYEXE="
 for %%v in (3.13 3.12 3.11 3.14) do (
   if not defined PYEXE (
@@ -46,37 +37,8 @@ if not defined PYEXE (
   pause
   exit /b 1
 )
-for /f "delims=" %%v in ('%PYEXE% --version 2^>^&1') do echo    %%v
 
-echo ==^> Creating a virtual environment ^(.venv^)
-%PYEXE% -m venv .venv
-if errorlevel 1 (
-  echo.
-  echo Could not create .venv. See the error above.
-  pause
-  exit /b 1
-)
-
-echo ==^> Installing Python packages ^(a few minutes the first time^)
-".venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
-".venv\Scripts\python.exe" -m pip install --quiet -r backend\requirements.txt
-if errorlevel 1 (
-  echo.
-  echo Could not install the Python packages. See the error above.
-  echo You can retry with:  .venv\Scripts\python -m pip install -r backend\requirements.txt
-  pause
-  exit /b 1
-)
-echo ==^> Setup complete
-echo.
-
-:haveenv
-echo.
-echo Starting Da RoastBox...
-echo   Set your API keys any time with:  python install.py
-echo   Settings console passphrase: roastbox
-echo.
-".venv\Scripts\python.exe" server.py %*
+%PYEXE% server.py %*
 if errorlevel 1 (
   echo.
   pause

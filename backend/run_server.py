@@ -113,13 +113,13 @@ def check_modules() -> list[str]:
             missing.append(package)
     if missing:
         say(FAIL, "Missing Python packages: " + ", ".join(sorted(set(missing))))
-        problems = [
-            "Install the backend dependencies, then run this again:",
-            "    ..\\.venv\\Scripts\\python -m pip install -r requirements.txt"
-            if os.name == "nt" else
-            "    ../.venv/bin/python -m pip install -r requirements.txt",
+        return [
+            "Install the backend dependencies with this exact interpreter, then run this again:",
+            f'    "{sys.executable}" -m pip install -r "{BACKEND / "requirements.txt"}"',
+            "Or just run the project's server.py from the project root - it creates a",
+            "virtual environment and installs everything automatically:",
+            f"    python {rel(ROOT / 'server.py')}",
         ]
-        return problems
     say(OK, f"All {len(REQUIRED)} required packages import")
     return []
 
@@ -387,11 +387,11 @@ def main(argv: list[str] | None = None) -> int:
         rule("Import failed")
         print(f"  Missing module: {exc.name}", flush=True)
         print(
-            "  The package it belongs to is not installed. Reinstall:\n"
-            "      ..\\.venv\\Scripts\\python -m pip install -r requirements.txt"
-            if os.name == "nt" else
-            "  The package it belongs to is not installed. Reinstall:\n"
-            "      ../.venv/bin/python -m pip install -r requirements.txt",
+            "  The package it belongs to is not installed. Reinstall with this exact interpreter:\n"
+            f'      "{sys.executable}" -m pip install -r "{BACKEND / "requirements.txt"}"\n'
+            "  Or just run the project's server.py from the project root instead - it sets\n"
+            "  up a virtual environment and installs everything automatically:\n"
+            f"      python {rel(ROOT / 'server.py')}",
             flush=True,
         )
         return 1
