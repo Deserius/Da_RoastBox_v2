@@ -37,11 +37,30 @@ def _explicit_env(key: str) -> bool:
     Some settings carry a built-in default (for example
     ``ROAST_WRITER_PROVIDER`` defaults to ``openrouter``), so comparing
     against the config attribute cannot tell "declared" from "defaulted".
-    Only an explicitly exported variable outranks the console.
+    Only an explicitly exported variable outranks the console. Values that
+    came from the project's own .env do not count: that file is where the
+    console writes, so treating it as "declared" would make every saved key
+    permanently un-editable after the next restart.
     """
     import os
 
-    return bool((os.environ.get(key) or "").strip())
+    if not (os.environ.get(key) or "").strip():
+        return False
+    return key not in _env_file_keys()
+
+
+def _env_file_keys() -> set:
+    """Names present in the project .env, which the console is allowed to own."""
+    try:
+        from dotenv import dotenv_values
+        from config import ROOT_DIR
+
+        path = ROOT_DIR / ".env"
+        if not path.exists():
+            return set()
+        return {k for k, v in dotenv_values(path).items() if v is not None}
+    except Exception:
+        return set()
 
 
 # field key -> human label. Order drives the console UI.
@@ -202,10 +221,13 @@ async def effective_snapshot() -> Dict[str, Dict[str, Any]]:
     for key, label in SECRET_FIELDS:
         from_env = _explicit_env(key)
         stored = _cache["secret"].get(key, "")
+        # A value written by the console lives in .env, so it counts as
+        # configured even when the console store itself is empty (fresh process).
+        from_file = bool((_env(key) or "").strip())
         secrets_out[key] = {
             "label": label,
-            "configured": from_env or bool(stored),
-            "source": "environment" if from_env else ("console" if stored else None),
+            "configured": from_env or bool(stored) or from_file,
+            "source": "environment" if from_env else ("console" if (stored or from_file) else None),
             "editable": not from_env,
             "hint": _mask(stored) if stored and not from_env else None,
         }

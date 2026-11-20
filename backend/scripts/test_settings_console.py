@@ -21,12 +21,27 @@ os.environ["ENABLE_PREVIEW_LOGIN"] = "true"
 os.environ["ALLOW_DEV_LOGIN"] = "true"
 os.environ["PREVIEW_UNLIMITED_CREDITS"] = "true"
 
+# Point the console's persistence at a throwaway file before the app boots, so a
+# test run can never leave placeholder credentials in the real backend/.env.
+import tempfile  # noqa: E402
+
+from services import env_writer  # noqa: E402
+
+_TMPDIR = tempfile.mkdtemp(prefix="roastbox-console-test-")
+env_writer.SECRETS_FILE = Path(_TMPDIR) / ".env"
+# Ambient declarations would legitimately outrank a console save; clear them so
+# the assertions describe the console alone.
+for _k in ("OPENAI_API_KEY", "ROAST_WRITER_PROVIDER", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
+    os.environ.pop(_k, None)
+
 import mongomock_motor  # noqa: E402
 import motor.motor_asyncio as motor_asyncio  # noqa: E402
 
 motor_asyncio.AsyncIOMotorClient = mongomock_motor.AsyncMongoMockClient
 
 from fastapi.testclient import TestClient  # noqa: E402
+
+from services import env_writer  # noqa: E402
 
 import server  # noqa: E402
 
@@ -38,6 +53,14 @@ def check(name, condition, detail=""):
 
 
 def main():
+    try:
+        _run()
+    finally:
+        import shutil
+        shutil.rmtree(_TMPDIR, ignore_errors=True)
+
+
+def _run():
     with TestClient(server.app) as client:
         preview = client.post("/api/auth/preview-login").json()
         ph = {"Authorization": f"Bearer {preview['session_token']}"}
