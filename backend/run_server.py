@@ -124,6 +124,20 @@ def check_modules() -> list[str]:
     return []
 
 
+def _fix_command() -> str:
+    """The correct re-run command for how this process was actually started.
+
+    __name__ is "__main__" only when this file was launched directly
+    (``python backend/run_server.py``); the root server.py imports this
+    module by name instead, so __name__ is "run_server" there. Getting this
+    wrong tells someone running via server.py to run a file one level removed
+    from where they are.
+    """
+    if __name__ == "__main__":
+        return "python run_server.py --fix"
+    return f"python {rel(ROOT / 'server.py')} --fix"
+
+
 def check_env(fix: bool) -> list[str]:
     if ENV_FILE.exists():
         say(OK, f"{rel(ENV_FILE)} found")
@@ -132,7 +146,7 @@ def check_env(fix: bool) -> list[str]:
         say(FAIL, f"{rel(ENV_FILE)} is missing")
         return [
             "Create it, then run this again:",
-            "    python run_server.py --fix      (generates a working .env)",
+            f"    {_fix_command()}      (generates a working .env)",
             "Or set your API keys with the key manager, which creates it for you:",
             "    python install.py",
         ]
@@ -367,13 +381,30 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     serve_build = not args.backend_only and not args.dev
+    if serve_build and not (FRONTEND_BUILD / "index.html").is_file():
+        # This ships committed to git specifically so it survives a plain `git
+        # clone` or a GitHub "Download ZIP" (both skip anything gitignored).
+        # Missing here means a non-standard checkout; try to self-heal only
+        # when the tools to do so are already present, without reaching out
+        # to install anything new (that path is setup.bat/setup.sh's job).
+        frontend_dir = ROOT / "frontend"
+        node_modules = frontend_dir / "node_modules"
+        yarn = shutil.which("yarn")
+        if yarn and node_modules.is_dir():
+            say(WARN, f"{rel(FRONTEND_BUILD)} not found - building it now (node_modules is already installed)")
+            built = subprocess.run([yarn, "build"], cwd=str(frontend_dir),
+                                    env={**os.environ, "CI": "false"})
+            if built.returncode != 0:
+                say(FAIL, "Frontend build failed; see the output above")
+        else:
+            say(WARN, f"{rel(FRONTEND_BUILD)} not found - the API will run without a frontend")
+            say(INFO, "Build it once:  cd frontend && yarn install --ignore-engines && yarn build")
+
     if serve_build:
         if (FRONTEND_BUILD / "index.html").is_file():
             os.environ["FRONTEND_BUILD_DIR"] = str(FRONTEND_BUILD)
             say(OK, f"Frontend: serving prebuilt {rel(FRONTEND_BUILD)} from this same server")
         else:
-            say(WARN, f"{rel(FRONTEND_BUILD)} not found - the API will run without a frontend")
-            say(INFO, "Build it once:  cd frontend && yarn install --ignore-engines && yarn build")
             serve_build = False
 
     if args.check:

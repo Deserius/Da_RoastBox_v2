@@ -9,7 +9,12 @@
 /coverage
 
 # production
-/build
+# NOTE: frontend/build IS committed to git on purpose. server.py / run_server.py
+# serve it directly so the app needs no Node.js or Yarn install to run, including
+# for anyone who gets this project via `git clone` or GitHub's "Download ZIP" -
+# both skip anything gitignored, so if this stayed ignored the app would have
+# nothing to serve outside of the maintainer's own hand-built download package.
+# Run `yarn build` after editing frontend source, then commit the new build/.
 
 # misc
 .DS_Store
