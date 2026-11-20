@@ -89,6 +89,25 @@ def main():
 
         check("anonymous access is refused", client.get("/api/settings/console").status_code == 401)
 
+        # Regression: Google sign-in state must reflect a stored credential
+        # immediately, without a restart (config is snapshotted at import).
+        before = client.get("/api/auth/email/status").json()["google_login_available"]
+        unlock_again = client.post("/api/settings/console/unlock", json={"passphrase": "test-passphrase"}, headers=ph)
+        check("preview account can unlock again", unlock_again.status_code == 200)
+        client.put("/api/settings/console", headers=ph, json={
+            "keys": {"GOOGLE_CLIENT_ID": "999-abc.apps.googleusercontent.com",
+                     "GOOGLE_CLIENT_SECRET": "GOCSPX-testsecret"},
+            "mode": "apply", "persist_env": False})
+        after = client.get("/api/auth/email/status").json()["google_login_available"]
+        check("Google sign-in turns on after saving credentials", after is True and before is False,
+              f"before={before} after={after}")
+
+        # Regression: env-status must report gitignore protection truthfully,
+        # not just whether this request happened to add the rule.
+        env = client.get("/api/settings/env-status", headers=ph).json()
+        check("env-status reports the file is gitignored", env["gitignored"] is True, str(env))
+        check("env-status names the secrets file", env["file"] == "backend/.env", str(env))
+
 
 main()
 print("PASS: settings console guards, live wiring and secret hygiene")

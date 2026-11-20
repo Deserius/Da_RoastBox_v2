@@ -18,6 +18,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 import config
+from services.runtime_settings import secret_cached
 from auth_deps import validate_cookie_origin
 from db import (users_collection, sessions_collection, email_credentials_collection,
                 email_tokens_collection, email_rate_limits_collection)
@@ -110,7 +111,10 @@ async def status(response: Response):
             "recovery_available": auth.mail_available(),
             # Drives the sign-in screen: whether Google sign-in is offered, and
             # whether the operator supplied their own OAuth client.
-            "google_login_available": bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET),
+            # Resolved live: a Google client entered in the settings console takes
+            # effect on the next request instead of needing a restart.
+            "google_login_available": bool((config.GOOGLE_CLIENT_ID or secret_cached("GOOGLE_CLIENT_ID"))
+                                           and (config.GOOGLE_CLIENT_SECRET or secret_cached("GOOGLE_CLIENT_SECRET"))),
             "google_auth_url": config.GOOGLE_AUTH_URL,
             "preview_login_available": config.ENABLE_PREVIEW_LOGIN,
             "dev_login_available": config.ALLOW_DEV_LOGIN}
