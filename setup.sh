@@ -41,17 +41,24 @@ restore_pkg() {
 trap restore_pkg EXIT INT TERM
 
 # --- Python ---------------------------------------------------------------
+# 3.11 is the floor: older interpreters have no wheels for several pinned
+# packages. Newer versions are allowed; 3.14 ships Windows and Linux wheels for
+# every pinned dependency, so refusing it would be wrong.
 PY=""
-for c in python3.13 python3.12 python3.11 python3; do
+for c in python3.14 python3.13 python3.12 python3.11 python3; do
   if command -v "$c" >/dev/null 2>&1 &&
-    "$c" -c 'import sys; assert (3,11) <= sys.version_info[:2] <= (3,13)' 2>/dev/null; then
+    "$c" -c 'import sys; assert sys.version_info[:2] >= (3, 11)' 2>/dev/null; then
     PY="$c"
     break
   fi
 done
-[ -n "$PY" ] || fail "Python 3.11, 3.12 or 3.13 is required (3.10 and older lack wheels for several pinned packages). Install one from https://www.python.org/downloads/ and rerun."
+if [ -z "$PY" ]; then
+  fail "Python 3.11 or newer is required (3.10 and older lack wheels for several pinned packages). Install one from https://www.python.org/downloads/ and rerun."
+fi
 
 say "Using $($PY --version)"
+"$PY" -c 'import sys; sys.exit(0 if sys.version_info[:2] <= (3, 13) else 1)' ||
+  warn "This Python is newer than the versions the project was built against. It is expected to work."
 [ -d .venv ] || "$PY" -m venv .venv
 # shellcheck disable=SC1091
 . .venv/bin/activate
@@ -70,8 +77,9 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 say "Using Node $(node --version)"
 [ "$NODE_MAJOR" -ge 18 ] ||
   fail "Node $(node --version) is too old. Install Node 20 or 22 LTS from https://nodejs.org and rerun."
-[ "$NODE_MAJOR" -ge 25 ] &&
+if [ "$NODE_MAJOR" -ge 25 ]; then
   warn "Node $(node --version) is newer than this project was built against. If the frontend misbehaves, install Node 20 or 22 LTS."
+fi
 
 command -v yarn >/dev/null 2>&1 ||
   fail "yarn is required to install the frontend (the repo's pinned dependency tree depends on yarn's 'resolutions' field; npm produces a tree that will not build).

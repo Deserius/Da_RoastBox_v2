@@ -33,7 +33,7 @@ Both give the same project. The zip has no `.git` history and no `node_modules`.
 
 | Requirement | Version | Why |
 |---|---|---|
-| Python | 3.11 – 3.13 | Backend (FastAPI) |
+| Python | **3.11 or newer** (3.14 verified) | Backend (FastAPI) |
 | Node.js | 18+, ideally 20 or 22 LTS | Frontend (React) |
 | yarn | 1.22.x | Frontend install — npm produces a tree that will not build |
 | MongoDB | 6 or newer | Database — **required** |

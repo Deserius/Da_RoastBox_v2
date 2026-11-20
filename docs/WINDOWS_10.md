@@ -9,7 +9,7 @@ covered below. Nothing in the app itself requires Windows 11.
 
 | Component | What to install | Notes |
 |---|---|---|
-| Python | 3.11, 3.12 or 3.13 from [python.org](https://www.python.org/downloads/windows/) | Tick **"Add python.exe to PATH"**. Avoid the Microsoft Store build. 3.10 or older will fail: several pinned packages have no wheels. |
+| Python | **3.11 or newer** from [python.org](https://www.python.org/downloads/windows/) | Tick **"Add python.exe to PATH"**. Avoid the Microsoft Store build. 3.14 works: every pinned dependency ships a cp314 Windows wheel. 3.10 or older fails — no wheels. |
 | Node.js | **20 LTS or 22 LTS** from [nodejs.org](https://nodejs.org/en/download) | 18 works. 24+ is untested; 25+ warns. |
 | yarn | Installed automatically by `setup.bat`, or `npm install -g yarn` | Required — see §5. |
 | MongoDB | See §2 | **Required.** The app will not start without it. |
@@ -64,6 +64,41 @@ backend plus virtualization enabled in BIOS).
 ```bat
 docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
 ```
+
+### Using a newer Python (3.14, or 3.15 when it lands)
+
+The pinned dependency set installs cleanly on Python 3.14 with **binary wheels
+only** — no compiler, no Visual Studio Build Tools. Verified by resolving the
+whole `backend/requirements.txt` for `cp314-win_amd64`:
+
+```
+numpy 2.4.6          cp314-win_amd64
+pydantic_core 2.50   cp314-win_amd64
+pillow 13.0.0        cp314-win_amd64
+cryptography 50.0.2  cp311-abi3-win_amd64
+pymongo 4.18.3       cp314-win_amd64
+jiter 0.19.0         cp314-win_amd64
+cffi 2.1.1           cp314-win_amd64
+websockets 17.4      cp314-win_amd64
+charset-normalizer   cp314-win_amd64
+imageio-ffmpeg       py3-none-win_amd64
++ 39 pure-Python wheels
+sdists requiring compilation: 0
+```
+
+So `setup.bat` accepts anything **3.11 or newer** and only prints a note for
+versions it was not built against. If a future Python ever does break the
+install, you can (a) install 3.13 side by side and let `py -3.13` be picked up,
+or (b) point `PY_PYTHON` at 3.13:
+
+```bat
+set PY_PYTHON=3.13
+setup.bat
+```
+
+To install 3.13 alongside 3.14 without replacing it, use the python.org
+installer and leave "Add to PATH" unticked for the new one — the `py` launcher
+picks up every installed version.
 
 ---
 

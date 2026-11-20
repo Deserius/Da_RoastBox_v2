@@ -38,18 +38,35 @@ echo ============================================================
 echo.
 
 REM ---------------------------------------------------------------- Python
+REM Prefer a version this project was built against when several are installed,
+REM since the `py` launcher would otherwise pick the newest one. 3.14 is
+REM supported too - every pinned dependency has a cp314 Windows wheel - so the
+REM fallback chain ends at it rather than failing.
 echo ==^> Checking Python
 set "PYEXE="
-py -3 --version >nul 2>&1
-if not errorlevel 1 set "PYEXE=py -3"
+for %%v in (3.13 3.12 3.11 3.14) do (
+  if not defined PYEXE (
+    py -%%v --version >nul 2>&1
+    if not errorlevel 1 set "PYEXE=py -%%v"
+  )
+)
+if not defined PYEXE (
+  py -3 --version >nul 2>&1
+  if not errorlevel 1 set "PYEXE=py -3"
+)
 if not defined PYEXE (
   python --version >nul 2>&1
   if not errorlevel 1 set "PYEXE=python"
 )
 if not defined PYEXE goto nopython
 for /f "delims=" %%v in ('%PYEXE% --version 2^>^&1') do echo    %%v
-%PYEXE% -c "import sys;sys.exit(0 if (3,11)<=sys.version_info[:2]<=(3,13) else 1)"
+REM 3.11 is the floor: older interpreters have no wheels for several pinned
+REM packages. Newer versions are allowed - 3.14 ships wheels for every pinned
+REM dependency on Windows x64, so refusing it would be wrong.
+%PYEXE% -c "import sys;sys.exit(0 if sys.version_info[:2]>=(3,11) else 1)"
 if errorlevel 1 goto badpython
+%PYEXE% -c "import sys;sys.exit(0 if sys.version_info[:2]<=(3,13) else 1)"
+if errorlevel 1 echo    Note: Python 3.14+ is newer than the versions this project was built against. It is expected to work.
 
 REM ---------------------------------------------------------------- venv
 if not exist ".venv\Scripts\python.exe" (
@@ -75,8 +92,7 @@ set "NODEMAJOR=!NODEV:v=!"
 for /f "tokens=1 delims=." %%a in ("!NODEMAJOR!") do set "NODEMAJOR=%%a"
 if !NODEMAJOR! LSS 18 goto oldnode
 if !NODEMAJOR! GEQ 25 (
-  echo.
-  echo    WARNING: Node !NODEV! is newer than this project was built against.
+  for /f "delims=" %%v in ('node --version') do echo    WARNING: Node %%v is newer than this project was built against.
   echo             If "yarn start" fails, install Node 20 or 22 LTS.
   echo.
 )
@@ -109,8 +125,7 @@ copy /y yarn.lock yarn.lock.bak >nul
 
 echo ==^> Installing frontend dependencies ^(this is the slow part^)
 call yarn install --ignore-engines --non-interactive
-set "YARN_RC=%errorlevel%"
-if not "%YARN_RC%"=="0" goto retryyarn
+if errorlevel 1 goto retryyarn
 goto yarnok
 
 :retryyarn
@@ -203,7 +218,7 @@ goto done
 REM ================================================================= errors
 :nopython
 echo.
-echo ERROR: Python 3.11, 3.12 or 3.13 was not found.
+echo ERROR: Python 3.11 or newer was not found.
 echo        Install it from https://www.python.org/downloads/windows/
 echo        During setup TICK "Add python.exe to PATH".
 echo        Prefer the python.org installer over the Microsoft Store build.
@@ -213,9 +228,10 @@ exit /b 1
 
 :badpython
 echo.
-echo ERROR: This project needs Python 3.11, 3.12 or 3.13.
-echo        Several pinned packages do not build on 3.10 or older.
-echo        Install a supported version from python.org and run setup.bat again.
+echo ERROR: Python 3.11 or newer is required.
+echo        You have an older interpreter, which has no wheels for several
+echo        pinned packages. Install Python 3.13 or 3.14 from
+echo        https://www.python.org/downloads/windows/ and run setup.bat again.
 echo.
 pause
 exit /b 1
@@ -259,7 +275,7 @@ exit /b 1
 
 :oldnode
 echo.
-echo ERROR: Node !NODEV! is too old. This project needs Node 18 or newer.
+echo ERROR: Your Node version is too old. This project needs Node 18 or newer.
 echo        Install Node 20 or 22 LTS from https://nodejs.org/en/download
 echo.
 pause
