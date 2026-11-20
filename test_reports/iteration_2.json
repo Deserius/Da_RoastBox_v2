@@ -1,0 +1,47 @@
+{
+  "summary": "Tested v7/v8 features end to end on the public URL. Generated 1 studio roast and 1 battle (2 rounds, persona_22 vs persona_25), staying within the LLM budget. Roasters page passes: filters 40/25/15, detail modal shows bio, lingo and kill shots, voice preview returns 200 and plays, 'Roast with them' opens /studio?persona=persona_1 with that persona preselected, and a locked premium persona sends you to /credits. Battle passes: a locked user sees battle-locked and the unlock button goes to /credits. An unlocked user's FIGHT returned 200 with 14 beats, all with emotion, laugh and beat tags. The scoreboard rose live during playback (0-0 to 4-0), skip showed the winner (26-24), and credits went from 50 to 45. Studio passes: free daily roast, 10 beats, emotion tags, and the share link was created. The HD reel charged 5 credits and the video appeared in under 150s. Video, download link and battle reel all return video/mp4; the battle reel rendered in 44s at 7MB. Public share pages /r/<id> load without login for both roast and battle (share-winner shown); play loads all 14 crowd SFX plus voice files; unknown id shows share-error. Fixed 2 bugs: refunds paid twice when a reel render failed, and 'tag' transcript lines displayed as a small pill. pytest: 111/111 pass (27 new).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/battle/generate", "issue": "subject_name is dropped from the prompt when no photo is uploaded. build_battle_prompt only mentions the subject when has_images is true. The UI field says 'Optional: a victim they both roast', so entering 'Dave' without a photo has no effect."},
+      {"endpoint": "/api/roast/{id}/reel (FIXED)", "issue": "_render_job refunded credits twice on failure (the 'if refund' block was duplicated), giving users +5 free credits for each failed render. Fixed in routes/reels.py, which also had a duplicate users_collection import. Covered by test_reel_failure_refunds_exactly_once."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ShowTranscript (FIXED)", "issue": "Each line got the class beat-${type}, so a 'tag' beat had the class 'beat-tag' and inherited the small rounded badge style: tiny text, avatar stacked above, pill shape. Renamed the class to line-${type} and updated the 2 CSS rules in index.css.", "selector": "[data-testid^=transcript-line-]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Public share page /r/:id (logged out)", "issue": "AuthProvider calls /api/auth/me 4 times without a token, giving 4 console errors (401). It should skip /auth/me when there is no roastbox_token.", "affected_selectors": ["[data-testid=share-page]"]}
+    ],
+    "design_issues": [
+      {"screen": "/roasters filter and /battle rounds selector", "issues": ["Both reuse the studio's 2-column .tier-toggle grid, so 3 options wrap into 2 rows: the third button (Premium / 4 rounds) sits alone on a second row as a big full-width block. Use a 3-column grid or inline pills."]},
+      {"screen": "/battle after FIGHT", "issues": ["The page stays scrolled to the FIGHT button at the bottom of the left column while results appear at the top of the right column ('The Ring'). The user sees an empty panel and must scroll up. Scroll the ring/scoreboard into view when generation starts or finishes."]},
+      {"screen": "Studio result header (Live Transcript)", "issues": ["Once the reel is ready, the 1080x1920 video and download button render inline in the header row between the Share input and Stop. This makes the header very tall and squeezes the layout. Move the reel preview into its own block or modal."]},
+      {"screen": "Share page /r/:id", "issues": ["The transcript is a fixed-height inner scroll box on a standalone public page; the last card is cut off just above the disclaimer. Let the page scroll naturally."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_v8_battle_reel_share.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Include subject_name in build_battle_prompt even when no image is uploaded (services/roast_writer.py)",
+    "Skip /api/auth/me in AuthContext when there is no token (avoids 401 errors on the public share page)",
+    "Fix the 3-option toggle layout on the Roasters filter and Battle rounds selector",
+    "Auto-scroll to the battle ring/scoreboard when FIGHT is pressed",
+    "Move the reel video preview out of the transcript header row",
+    "Optional: cap ReelButton polling (it currently retries forever on network errors)"
+  ],
+  "critical_code_review_comments": [
+    "routes/reels.py: refunds were applied twice on failure (fixed). The 'existing reel' lookup is not filtered by user_id; this is safe only because roast ownership is checked first.",
+    "routes/reels.py: renders run in-process via asyncio.create_task with no reference kept, so the task could be garbage-collected. Keep a set of tasks. recover_interrupted_reels already handles restarts.",
+    "useShowPlayer.speak: when stop() pauses the audio mid-line the promise never resolves (a harmless leak); also resolve it on stop.",
+    "roast_writer.build_battle_prompt ignores subject_name when has_images is false (see backend minor)."
+  ],
+  "updated_files": ["/app/backend/routes/reels.py", "/app/frontend/src/components/ShowTranscript.jsx", "/app/frontend/src/index.css", "/app/backend/tests/test_v8_battle_reel_share.py"],
+  "success_rate": {"backend": "100% (111/111 pytest after the refund fix)", "frontend": "95% (all requested flows pass; layout issues only)"},
+  "test_credentials": "dev-login: TEST_t1_battle@roastbox.com (roast_battle_unlocked=true, credits set to 50, now 35); TEST_t1_locked@roastbox.com (locked)",
+  "seed_data_creation": "Studio roast 26550f6e-3193-4227-9629-8bc97d75a879 (share /r/M1kxA3YuwgY, reel e436410d...). Battle 4677a3f9-ce8c-4ae8-8828-74d896f6e37a (share /r/H9NZwL9A60Y, reel a717eeeb...). Both belong to TEST_t1_battle@roastbox.com.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_v8_battle_reel_share.py uses the newest roast and battle of TEST_t1_battle@roastbox.com from Mongo (no LLM calls) and skips if none exist. The refund test inserts a broken TEST_ battle doc so the render fails, then checks credits are unchanged. Audio playback runs in headless Chromium and the SFX and voice files load with 200.",
+  "rca of the issue": "Double refund: copy-paste duplication of the 'if refund' block in the except branch of _render_job. TAG styling: the line div's modifier class beat-${type} collided with the existing .beat-tag badge class when type was 'tag'."
+}
