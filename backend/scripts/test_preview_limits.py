@@ -34,6 +34,7 @@ async def attempt(patch_limit, times):
     with __import__("unittest.mock", fromlist=["patch"]).patch.object(pb, "preview_usage_collection", fake), \
          __import__("unittest.mock", fromlist=["patch"]).patch.object(pb, "PREVIEW_HOSTED_DAILY_SHOW_LIMIT", patch_limit), \
          __import__("unittest.mock", fromlist=["patch"]).patch.object(pb, "ENABLE_PREVIEW_LOGIN", True), \
+         __import__("unittest.mock", fromlist=["patch"]).patch.object(__import__("config"), "DRY_RUN", False), \
          __import__("unittest.mock", fromlist=["patch"]).patch.object(pb, "ALLOW_PREVIEW_HOSTED_AI", True), \
          __import__("unittest.mock", fromlist=["patch"]).patch.object(pb, "EMERGENT_LLM_KEY", "fake"), \
          __import__("unittest.mock", fromlist=["patch"]).patch.object(pb, "OPENAI_API_KEY", ""), \

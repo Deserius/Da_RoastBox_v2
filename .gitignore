@@ -148,3 +148,6 @@ runtime/
 # These are real secrets: keep them on this machine only.
 backend/.env
 backend/.env.local
+
+# Locally assembled download package (see HOW_TO_RUN.md). Not cloud source.
+/download/
