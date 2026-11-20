@@ -1,0 +1,69 @@
+# Never send local credentials, user data, downloaded runtimes or caches to the build.
+.git
+**/.env
+**/.env.*
+!**/.env.example
+.data
+.tools
+.cache
+.venv
+venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+frontend/build
+backend/audio_cache
+backend/local_storage
+memory
+test_reports
+test_result.md
+**/*.zip
+**/*.log
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*token.json*
+**/*credentials.json*
+**/.netrc
+**/.npmrc
+**/.pypirc
+
+# Private operational state must never enter a remote Docker build context.
+.private
+**/.private
+.vercel
+**/.vercel
+**/*.har
+
+# Mobile signing keys and service credentials are never source/build assets.
+*.jks
+*.keystore
+*.mobileprovision
+**/key.properties
+**/*-service-account.json
+
+# Private filled deployment files and database exports are never source.
+**/*.env
+**/*.bson
+**/*.archive
+**/*.dump
+**/*.wt
+**/*.turtle
+**/*.bak
+**/*.backup
+**/*.ndjson
+**/*.jsonl
+
+backend/media_tmp/
+
+# Filled environment variants are private; checked-in examples remain allowed.
+**/*.env.*
+!**/.env.example
+!**/*.env.example
+
+# Do not upload Windows binaries with a Linux cloud build.
+runtime

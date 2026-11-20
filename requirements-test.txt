@@ -1,0 +1,2 @@
+# Optional browser/UI regression tests. Install backend/requirements-dev.txt separately for backend tests.
+playwright==1.64.1
