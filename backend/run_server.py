@@ -259,6 +259,64 @@ def rel(path: Path) -> str:
         return str(path)
 
 
+# ------------------------------------------------------------- first-run GUI
+def _has_display() -> bool:
+    """Best-effort guess at whether a desktop session is available for Tk.
+
+    Windows always has one (Tk talks to the native GUI, not X11). On Linux/macOS
+    we look for the environment variables a desktop session sets; a headless
+    server/container/sandbox has neither, so we skip trying to pop a window
+    that would just fail.
+    """
+    if os.name == "nt":
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _read_env_values() -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not ENV_FILE.exists():
+        return values
+    for line in ENV_FILE.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#") or "=" not in s:
+            continue
+        key, _, val = s.partition("=")
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        values[key.strip()] = val
+    return values
+
+
+def has_a_provider_key() -> bool:
+    """True once at least one AI provider credential is actually filled in."""
+    values = _read_env_values()
+    return bool(values.get("OPENROUTER_API_KEY") or values.get("OPENAI_API_KEY") or values.get("EMERGENT_LLM_KEY"))
+
+
+def launch_key_setup_gui() -> None:
+    """Open install.py's GUI and wait for it to close before continuing.
+
+    install.py pre-populates any key already saved in backend/.env (showing
+    it as already saved, not blank), so re-running this on an existing,
+    partially-configured install just lets someone fill the rest in or
+    re-verify - it never throws away what is already there. That same window
+    is what writes the final backend/.env, via its own Save/Save All buttons.
+    """
+    installer = ROOT / "install.py"
+    if not installer.exists():
+        say(WARN, "install.py is missing - cannot open the key setup window")
+        return
+    say(INFO, "No AI provider key is configured yet - opening the key setup window...")
+    say(INFO, "Enter at least one of OpenAI or OpenRouter, click Verify, then Save (or Save All) and close it.")
+    try:
+        subprocess.run([sys.executable, str(installer)])
+    except OSError as exc:
+        say(WARN, f"Could not open the key setup window automatically ({exc})")
+        say(INFO, "Run it yourself any time:  python install.py")
+
+
 # -------------------------------------------------------------------- runtime
 def wait_for(url: str, timeout: float) -> bool:
     deadline = time.time() + timeout
@@ -348,6 +406,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fix", action="store_true", help="repair .env before starting")
     ap.add_argument("--check", action="store_true", help="diagnose only, then exit")
     ap.add_argument("--reload", action="store_true", help="auto-reload on file changes")
+    ap.add_argument("--no-key-setup-gui", action="store_true",
+                     help="never auto-open the key setup window, even on a first run with no keys configured")
     args = ap.parse_args(argv)
 
     os.chdir(BACKEND)
@@ -359,7 +419,24 @@ def main(argv: list[str] | None = None) -> int:
     problems += check_python()
     problems += check_modules()
     if not problems:
-        problems += check_env(args.fix)
+        # Treat a missing .env the same as --fix here: a first run should not
+        # dead-end with an instruction to re-run a flag, it should just get a
+        # working .env (then the key setup window below fills in the keys).
+        problems += check_env(args.fix or not ENV_FILE.exists())
+
+    # First run (or an existing .env nobody has put a real key into yet): open
+    # the same GUI "python install.py" uses, pre-populated with whatever is
+    # already saved, and let that window write the final backend/.env. Skipped
+    # for --check (it promises to change nothing) and on a headless machine
+    # with no desktop session, where a Tk window could never appear anyway.
+    if not problems and not args.check and not args.no_key_setup_gui and not has_a_provider_key():
+        if _has_display():
+            launch_key_setup_gui()
+        else:
+            say(WARN, "No AI provider key is configured yet, and no desktop session was found to ask for one")
+            say(INFO, "Set at least one key with:  python install.py")
+            say(INFO, "(or set OPENROUTER_API_KEY / OPENAI_API_KEY directly in backend/.env)")
+
     if ENV_FILE.exists():
         problems += check_env_values()
     problems += check_port(args.port)

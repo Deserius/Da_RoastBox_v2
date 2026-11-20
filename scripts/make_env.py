@@ -44,11 +44,14 @@ BLOCK = [
     "ALLOW_RUNTIME_SETTINGS=true",
     "RUNTIME_SETTINGS_PASSPHRASE=roastbox",
     "",
-    # Leave ROASTBOX_DRY_RUN unset (real providers). It only exists for
-    # developing this project itself on a network-locked machine with no
-    # path to OpenAI/OpenRouter/ElevenLabs - never enable it for an actual
-    # install, or every script and photo analysis call silently becomes a
-    # canned local fake no matter how valid the configured API keys are.
+    # Explicitly false (real providers), not just left unset, so there is no
+    # ambiguity about whether a run is real. ROASTBOX_DRY_RUN only exists for
+    # developing this project itself on a network-locked machine with no path
+    # to OpenAI/OpenRouter/ElevenLabs - never set it true for an actual install,
+    # or every script and photo analysis call silently becomes a canned local
+    # fake no matter how valid the configured API keys are, which can mask a
+    # real provider failure as a passing run.
+    "ROASTBOX_DRY_RUN=false",
     "",
 ]
 

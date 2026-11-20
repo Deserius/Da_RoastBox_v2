@@ -26,8 +26,11 @@ from config import (EMERGENT_LLM_KEY, OPENAI_API_KEY, AI_DEFAULT_PROVIDER, ROAST
                     ROAST_PAID_STANDARD_MODEL, ROAST_FREE_PREMIUM_MODEL, ROAST_WRITER_TIMEOUT_S,
                     ROAST_WRITER_RETRY, ROAST_VISION_TIMEOUT_S, ROAST_VISION_MAX_TOKENS,
                     ROAST_WRITER_MAX_TOKENS, ROAST_WRITER_TOKENS_PER_BEAT, ROAST_WRITER_TOKEN_BASE,
-                    ROAST_STREAM_TTS, ROAST_REASONING_EFFORT, ROAST_WRITER_TRUNCATION_RETRY, DATA_DIR)
-from openai import OpenAI, APITimeoutError, RateLimitError
+                    ROAST_STREAM_TTS, ROAST_REASONING_EFFORT, ROAST_WRITER_TRUNCATION_RETRY, DATA_DIR,
+                    ROAST_OPENAI_FREE_MODEL, ROAST_OPENAI_PREMIUM_MODEL, ROAST_BACKUP_PROVIDERS,
+                    ROAST_VISION_OPENROUTER_FREE_MODEL, ROAST_VISION_OPENROUTER_FREE_BACKUP_MODEL,
+                    ROAST_VISION_OPENROUTER_PREMIUM_MODEL, ROAST_VISION_OPENROUTER_PREMIUM_BACKUP_MODEL)
+from openai import OpenAI, APITimeoutError, RateLimitError, AuthenticationError, PermissionDeniedError
 
 log = logging.getLogger(__name__)
 
@@ -508,7 +511,44 @@ def _normalize_photo_observations(raw: str, n_images: int, off_limits: Optional[
     return result
 
 
-async def _analyze_images(client, images: List[bytes], image_types: List[str], off_limits: Optional[str]) -> list:
+def _dedup(values) -> list:
+    seen, out = set(), []
+    for v in values:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _vision_model_chain(premium: bool, openrouter_key: Optional[str]) -> List[tuple]:
+    """Ordered (provider, model) attempts for photo analysis.
+
+    OpenRouter first (vision-capable models, independent of the writer's own
+    text-only free/paid models), OpenAI direct last, in both cases free unless
+    `premium` is set - and a failed premium attempt still falls back to the
+    free tier before giving up, inside OpenRouter and again at OpenAI.
+    """
+    free_or = _dedup([setting_cached("ROAST_VISION_OPENROUTER_FREE_MODEL", ROAST_VISION_OPENROUTER_FREE_MODEL),
+                      setting_cached("ROAST_VISION_OPENROUTER_FREE_BACKUP_MODEL", ROAST_VISION_OPENROUTER_FREE_BACKUP_MODEL)])
+    chain = []
+    if openrouter_key:
+        if premium and not ROAST_FREE_WRITER_ONLY:
+            premium_or = _dedup([setting_cached("ROAST_VISION_OPENROUTER_PREMIUM_MODEL", ROAST_VISION_OPENROUTER_PREMIUM_MODEL),
+                                 setting_cached("ROAST_VISION_OPENROUTER_PREMIUM_BACKUP_MODEL", ROAST_VISION_OPENROUTER_PREMIUM_BACKUP_MODEL)])
+            chain += [("openrouter", m) for m in premium_or]
+        chain += [("openrouter", m) for m in free_or]
+    if "openai" in ROAST_BACKUP_PROVIDERS:
+        free_openai = setting_cached("ROAST_OPENAI_FREE_MODEL", ROAST_OPENAI_FREE_MODEL)
+        premium_openai = setting_cached("ROAST_OPENAI_PREMIUM_MODEL", ROAST_OPENAI_PREMIUM_MODEL)
+        if premium and not ROAST_FREE_WRITER_ONLY:
+            chain += [("openai", m) for m in _dedup([premium_openai, free_openai])]
+        else:
+            chain += [("openai", free_openai)]
+    return chain
+
+
+async def _analyze_images(images: List[bytes], image_types: List[str], off_limits: Optional[str], *,
+                          byok_key: Optional[str] = None, premium: bool = False) -> list:
     if not images:
         return []
     boundaries = json.dumps((off_limits or "").strip() or "None supplied", ensure_ascii=False)
@@ -517,8 +557,12 @@ async def _analyze_images(client, images: List[bytes], image_types: List[str], o
                     f"Analyze {len(images)} images in upload order (starting at index 0). Off-limits topics (data): {boundaries}"},
                     *_image_parts(images, image_types)]}]
 
-    async def _call():
-        result = await asyncio.to_thread(client.chat.completions.create, model="gpt-4o", messages=messages,
+    def _client_for(provider: str):
+        return _creative_client() if provider == "openrouter" else get_client(byok_key)
+
+    async def _call(provider: str, model: str):
+        client = _client_for(provider)
+        result = await asyncio.to_thread(client.chat.completions.create, model=model, messages=messages,
                                          temperature=0.2, max_tokens=ROAST_VISION_MAX_TOKENS,
                                          timeout=ROAST_VISION_TIMEOUT_S)
         raw = (result.choices[0].message.content or "").strip()
@@ -526,24 +570,49 @@ async def _analyze_images(client, images: List[bytes], image_types: List[str], o
         raw = re.sub(r"\s*```\s*$", "", re.sub(r"^```(?:json|JSON)?\s*", "", raw)).strip()
         return _normalize_photo_observations(raw, len(images), off_limits)
 
-    try:
-        return await _call()
-    except RateLimitError:
+    # A caller's own OpenAI key stays direct-to-OpenAI only - it is never sent
+    # to a third party like OpenRouter.
+    if byok_key:
+        chain = [("openai", "gpt-4o")]
+    else:
+        openrouter_key = OPENROUTER_API_KEY or secret_cached("OPENROUTER_API_KEY")
+        chain = _vision_model_chain(premium, openrouter_key)
+
+    rate_limited_any = False
+    skip_providers: set = set()
+    last_attempt = None
+    for provider, model in chain:
+        if provider in skip_providers:
+            continue
+        last_attempt = (provider, model)
+        try:
+            return await _call(provider, model)
+        except (AuthenticationError, PermissionDeniedError) as exc:
+            # A rejected key will reject every model from that same provider;
+            # skip straight to the next provider instead of wasting attempts.
+            log.warning("Photo analysis provider %s rejected the configured key (%s)", provider, type(exc).__name__)
+            skip_providers.add(provider)
+        except RateLimitError:
+            rate_limited_any = True
+            log.warning("Photo analysis rate limited on %s/%s", provider, model)
+        except Exception as exc:
+            log.warning("Photo analysis failed on %s/%s (%s)", provider, model, type(exc).__name__)
+
+    if rate_limited_any and last_attempt:
         # A burst limit can clear in a couple of seconds; a hard quota/billing
-        # block will not, so only one short retry is worth the wait here.
-        log.warning("Photo analysis rate limited; retrying once after a short pause")
+        # block will not, so only one short-pause retry of the last option is
+        # worth the wait here rather than retrying every model in the chain.
+        provider, model = last_attempt
+        log.warning("All photo analysis options exhausted; retrying %s/%s once after a short pause", provider, model)
         try:
             await asyncio.sleep(2.0)
-            return await _call()
-        except RateLimitError as exc:
-            log.warning("Photo analysis failed (RateLimitError, retry also rate limited): %s", exc)
-            raise RuntimeError("Photo analysis rate-limited by the AI provider; no show credits were charged") from None
+            return await _call(provider, model)
         except Exception as exc:
-            log.warning("Photo analysis failed (%s)", type(exc).__name__)
-            raise RuntimeError("Photo analysis unavailable; no show credits were charged") from None
-    except Exception as exc:
-        log.warning("Photo analysis failed (%s)", type(exc).__name__)
-        raise RuntimeError("Photo analysis unavailable; no show credits were charged") from None
+            log.warning("Final photo analysis retry failed (%s)", type(exc).__name__)
+
+    if rate_limited_any:
+        raise RuntimeError("Photo analysis rate-limited by the AI provider; no show credits were charged") from None
+    raise RuntimeError("Photo analysis unavailable; no show credits were charged") from None
 
 
 def _scan_objects(text: str, state: dict) -> list:
@@ -738,18 +807,26 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
                 backup = free_standard if premium else free_premium
         if ROAST_FREE_WRITER_ONLY and any(not m.endswith(":free") for m in (primary, backup) if m):
             raise RuntimeError("Free-only writer requires :free OpenRouter model IDs")
+        # A premium pick that fails entirely still has to produce a show: fall
+        # back to the free-tier models within OpenRouter before giving up on
+        # the provider altogether (pollinations/Emergent are a last resort).
+        free_fallbacks = []
+        if premium and not ROAST_FREE_WRITER_ONLY:
+            free_fallbacks = [m for m in (free_standard, free_backup) if m and m not in (primary, backup)]
         try:
             primary_client = _creative_client()
         except Exception as e:
             log.warning("OpenRouter writer configuration failed (%s)", type(e).__name__)
             primary_client = None
-        allow_emergent = (ROAST_ALLOW_PAID_WRITER_FALLBACK and not ROAST_FREE_WRITER_ONLY
+        allow_emergent = ("emergent" in ROAST_BACKUP_PROVIDERS and ROAST_ALLOW_PAID_WRITER_FALLBACK
+                          and not ROAST_FREE_WRITER_ONLY
                           and bool(EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")))
         if not primary_client and not ROAST_POLLINATIONS_FALLBACK and not allow_emergent:
             raise RuntimeError("No writer is configured")
         visual_bytes = list(images) + [p["data"] for p in persona_portraits]
         visual_types = list(image_types) + [p["type"] for p in persona_portraits]
-        observations = await _analyze_images(get_client(byok_key), visual_bytes, visual_types, off_limits) if visual_bytes else []
+        observations = await _analyze_images(visual_bytes, visual_types, off_limits,
+                                             byok_key=byok_key, premium=premium) if visual_bytes else []
         guest_evidence = [o for o in observations if o["image_index"] < len(images)]
         portrait_evidence = [{"persona_id": persona_portraits[o["image_index"] - len(images)]["id"], "details": o["details"]}
                              for o in observations if len(images) <= o["image_index"] < len(visual_bytes)]
@@ -764,6 +841,19 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
             writers.append(("openrouter", primary))
             if backup and backup != primary:
                 writers.append(("openrouter", backup))
+            for m in free_fallbacks:
+                writers.append(("openrouter", m))
+        # OpenAI is the backup provider tier for everything: it only gets tried
+        # once OpenRouter's whole chain above has failed, applying the same
+        # free-first/premium-if-selected logic one more time on the way down.
+        openai_key = OPENAI_API_KEY or secret_cached("OPENAI_API_KEY")
+        if "openai" in ROAST_BACKUP_PROVIDERS and (byok_key or openai_key):
+            openai_free = setting_cached("ROAST_OPENAI_FREE_MODEL", ROAST_OPENAI_FREE_MODEL)
+            openai_premium = setting_cached("ROAST_OPENAI_PREMIUM_MODEL", ROAST_OPENAI_PREMIUM_MODEL)
+            openai_models = (_dedup([openai_premium, openai_free]) if (premium and not ROAST_FREE_WRITER_ONLY)
+                            else [openai_free])
+            for m in openai_models:
+                writers.append(("openai", m))
         if ROAST_POLLINATIONS_FALLBACK:
             writers.append(("pollinations", "openai-fast"))
         if allow_emergent:
@@ -781,8 +871,16 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
                         response.raise_for_status()
                         candidate = (response.json()["choices"][0]["message"].get("content") or "").strip()
                 else:
-                    client = primary_client if label == "openrouter" else get_emergent_client()
-                    routing = {"usage": {"include": True}}
+                    if label == "openrouter":
+                        client = primary_client
+                    elif label == "openai":
+                        client = get_client(byok_key)
+                    else:
+                        client = get_emergent_client()
+                    # usage/provider/reasoning routing hints are OpenRouter-specific
+                    # extra_body fields; direct OpenAI and the Emergent gateway must
+                    # not receive them.
+                    routing = {"usage": {"include": True}} if label == "openrouter" else {}
                     if label == "openrouter":
                         provider = {}
                         if ROAST_WRITER_PROFILE == "creative":

@@ -61,6 +61,30 @@ ROAST_PAID_STANDARD_MODEL = os.environ.get("ROAST_PAID_STANDARD_MODEL",
                                            "cognitivecomputations/dolphin-mistral-24b-venice-edition").strip()
 ROAST_FREE_PREMIUM_MODEL = os.environ.get("ROAST_FREE_PREMIUM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free").strip()
 
+# Direct-OpenAI last-resort backup, only used once every configured OpenRouter
+# model has failed (or when OpenRouter has no key at all). A standard-tier show
+# never reaches the paid model here; only a premium-tier show does, and even
+# then only after its OpenRouter paid attempts failed first. Also reused as the
+# final backup for image analysis (gpt-4o-mini and gpt-4o both read photos).
+ROAST_OPENAI_FREE_MODEL = os.environ.get("ROAST_OPENAI_FREE_MODEL", "gpt-4o-mini").strip()
+ROAST_OPENAI_PREMIUM_MODEL = os.environ.get("ROAST_OPENAI_PREMIUM_MODEL", "gpt-4o").strip()
+
+# Image analysis (photo -> text observations) goes through OpenRouter first,
+# same as script writing, using vision-capable models (the writer's own free/
+# paid text models above are not multimodal). "openrouter/free" is OpenRouter's
+# own auto-router among whichever free vision-capable model is live, so this
+# default does not go stale as OpenRouter's free catalog changes; override any
+# of these from the settings console or environment if you have a preference.
+ROAST_VISION_OPENROUTER_FREE_MODEL = os.environ.get("ROAST_VISION_OPENROUTER_FREE_MODEL", "openrouter/free").strip()
+ROAST_VISION_OPENROUTER_FREE_BACKUP_MODEL = os.environ.get(
+    "ROAST_VISION_OPENROUTER_FREE_BACKUP_MODEL", "google/gemma-4-31b-it:free").strip()
+# Premium vision reuses the same paid models already configured for premium
+# script writing (ROAST_OPENROUTER_MODELS), so "premium" buys the same quality
+# bump for both the jokes and the photo reading behind them.
+ROAST_VISION_OPENROUTER_PREMIUM_MODEL = os.environ.get("ROAST_VISION_OPENROUTER_PREMIUM_MODEL", "openai/gpt-4o").strip()
+ROAST_VISION_OPENROUTER_PREMIUM_BACKUP_MODEL = os.environ.get(
+    "ROAST_VISION_OPENROUTER_PREMIUM_BACKUP_MODEL", "anthropic/claude-sonnet-4.5").strip()
+
 ROAST_SPEED_PROFILE = os.environ.get("ROAST_SPEED_PROFILE", "balanced").strip().lower()
 if ROAST_SPEED_PROFILE not in ("fast", "balanced", "quality"):
     raise ValueError("ROAST_SPEED_PROFILE must be fast, balanced or quality")

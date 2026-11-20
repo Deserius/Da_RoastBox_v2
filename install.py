@@ -117,30 +117,97 @@ def _get(url: str, headers: dict) -> tuple[int, bytes]:
         return exc.code, exc.read()
 
 
-def verify_openai(key: str) -> tuple[str, str]:
+def _post_json(url: str, headers: dict, payload: dict) -> tuple[int, dict]:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, headers={**headers, "Content-Type": "application/json"}, method="POST")
     try:
-        status, body = _get("https://api.openai.com/v1/models",
-                             {"Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            status, body = resp.status, resp.read()
+    except urllib.error.HTTPError as exc:
+        status, body = exc.code, exc.read()
+    try:
+        parsed = json.loads(body.decode("utf-8", errors="replace")) if body else {}
+    except json.JSONDecodeError:
+        parsed = {}
+    return status, parsed
+
+
+def _configured_model(key: str, fallback: str) -> str:
+    """The model id this app will actually use, straight from backend/.env."""
+    return (read_env().get(key, "") or "").strip() or fallback
+
+
+def _chat_probe(url: str, headers: dict, model: str) -> tuple[int, dict]:
+    """One minimal real completion request - the hidden test call itself."""
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with only the single word: ok"}],
+        "max_tokens": 5,
+    }
+    return _post_json(url, headers, payload)
+
+
+def verify_openai(key: str) -> tuple[str, str]:
+    # The model Da RoastBox actually falls back to on OpenAI, not just any model.
+    model = _configured_model("ROAST_OPENAI_FREE_MODEL", "gpt-4o-mini")
+    try:
+        status, payload = _chat_probe(
+            "https://api.openai.com/v1/chat/completions", {"Authorization": f"Bearer {key}"}, model)
     except Exception as exc:  # noqa: BLE001
         return "warn", f"Could not reach OpenAI ({exc.__class__.__name__}). Saved, not verified."
     if status == 200:
-        return "ok", "Valid - OpenAI accepted this key."
+        text = ((payload.get("choices") or [{}])[0].get("message") or {}).get("content", "")
+        if text.strip():
+            return "ok", f"Valid - OpenAI generated a real reply with {model}."
+        return "warn", f"OpenAI returned HTTP 200 for {model} but no reply text; could not confirm."
     if status == 401:
         return "bad", "OpenAI rejected this key (401 Unauthorized)."
-    return "warn", f"OpenAI returned HTTP {status}; could not confirm."
+    if status == 429:
+        return "warn", f"Valid-looking key, but OpenAI rate-limited the test call to {model} - try again shortly."
+    if status == 404:
+        return "warn", f"OpenAI accepted the key but rejected model '{model}' (404). Check ROAST_OPENAI_FREE_MODEL."
+    err = (payload.get("error") or {}).get("message", "")
+    return "warn", f"OpenAI returned HTTP {status} for {model}{(': ' + err) if err else ''}; could not confirm."
 
 
 def verify_openrouter(key: str) -> tuple[str, str]:
-    try:
-        status, body = _get("https://openrouter.ai/api/v1/auth/key",
-                             {"Authorization": f"Bearer {key}"})
-    except Exception as exc:  # noqa: BLE001
-        return "warn", f"Could not reach OpenRouter ({exc.__class__.__name__}). Saved, not verified."
-    if status == 200:
-        return "ok", "Valid - OpenRouter accepted this key."
-    if status == 401:
-        return "bad", "OpenRouter rejected this key (401 Unauthorized)."
-    return "warn", f"OpenRouter returned HTTP {status}; could not confirm."
+    # Probe both models this app actually dispatches to on the free tier: the
+    # script writer and the (separate, vision-capable) photo analysis model.
+    writer_model = _configured_model("ROAST_WRITER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+    vision_model = _configured_model("ROAST_VISION_OPENROUTER_FREE_MODEL", "openrouter/free")
+    headers = {"Authorization": f"Bearer {key}", "HTTP-Referer": "https://da-roastbox.local",
+               "X-Title": "Da RoastBox key setup"}
+    results = {}
+    for label, model in (("writer", writer_model), ("vision", vision_model)):
+        try:
+            status, payload = _chat_probe("https://openrouter.ai/api/v1/chat/completions", headers, model)
+        except Exception as exc:  # noqa: BLE001
+            return "warn", f"Could not reach OpenRouter ({exc.__class__.__name__}). Saved, not verified."
+        results[label] = (status, payload, model)
+
+    writer_status, writer_payload, _ = results["writer"]
+    if writer_status in (401, 403):
+        return "bad", "OpenRouter rejected this key (401/403 Unauthorized)."
+
+    def _ok(status: int, payload: dict) -> bool:
+        text = ((payload.get("choices") or [{}])[0].get("message") or {}).get("content", "")
+        return status == 200 and bool(text.strip())
+
+    writer_ok = _ok(*results["writer"][:2])
+    vision_ok = _ok(*results["vision"][:2])
+    if writer_ok and vision_ok:
+        return "ok", f"Valid - OpenRouter generated real replies with {writer_model} and {vision_model}."
+    if writer_ok and not vision_ok:
+        v_status, v_payload, v_model = results["vision"]
+        err = (v_payload.get("error") or {}).get("message", "")
+        return "warn", (f"Writer model {writer_model} works, but the photo-analysis model {v_model} "
+                        f"returned HTTP {v_status}{(': ' + err) if err else ''}. Jokes will work; photos may not.")
+    status, payload, model = results["writer"]
+    if status == 429:
+        return "warn", f"Valid-looking key, but OpenRouter rate-limited the test call to {model} - try again shortly."
+    err = (payload.get("error") or {}).get("message", "")
+    return "warn", f"OpenRouter returned HTTP {status} for {model}{(': ' + err) if err else ''}; could not confirm."
 
 
 def verify_elevenlabs(key: str) -> tuple[str, str]:

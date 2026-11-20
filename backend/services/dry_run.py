@@ -115,6 +115,25 @@ def _tone_wav(text: str, seconds: Optional[float] = None) -> bytes:
     return buf.getvalue()
 
 
+def _is_vision_request(messages: list) -> int:
+    """How many image_url parts a request carries, so a photo-analysis call -
+    distinguishable from a script-writing call by its message shape - gets an
+    answer shaped like one instead of a fake script no caller asked for."""
+    count = 0
+    for msg in messages:
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if isinstance(content, list):
+            count += sum(1 for part in content if isinstance(part, dict) and part.get("type") == "image_url")
+    return count
+
+
+def _fake_photo_observations(n_images: int) -> str:
+    """Schema-valid stand-in for _normalize_photo_observations in roast_writer."""
+    photos = [{"image_index": i, "details": ["a person in frame", "a plain background"]}
+              for i in range(max(1, n_images))]
+    return json.dumps({"photos": photos})
+
+
 class _DryRunCompletions:
     def __init__(self):
         self.calls = 0
@@ -122,6 +141,10 @@ class _DryRunCompletions:
     def create(self, **kwargs):
         self.calls += 1
         messages = kwargs.get("messages") or []
+        n_images = _is_vision_request(messages)
+        if n_images:
+            return SimpleNamespace(choices=[SimpleNamespace(
+                message=SimpleNamespace(content=_fake_photo_observations(n_images)))])
         # The user block carries the cast and instructions; recover the beat count
         # from the prompt so the script satisfies the same structural checks.
         text = json.dumps(messages)[:40000]

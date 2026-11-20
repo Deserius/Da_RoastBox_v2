@@ -91,6 +91,12 @@ SETTING_FIELDS: Tuple[Tuple[str, str], ...] = (
     ("ROAST_PAID_PRIMARY_MODEL", "Premium shows - paid model (creative profile)"),
     ("ROAST_PAID_STANDARD_MODEL", "Standard shows - paid model (creative profile)"),
     ("ROAST_PAID_BACKUP_MODEL", "Paid backup model"),
+    ("ROAST_OPENAI_FREE_MODEL", "OpenAI backup - standard model"),
+    ("ROAST_OPENAI_PREMIUM_MODEL", "OpenAI backup - premium model"),
+    ("ROAST_VISION_OPENROUTER_FREE_MODEL", "Photo analysis - free model (OpenRouter)"),
+    ("ROAST_VISION_OPENROUTER_FREE_BACKUP_MODEL", "Photo analysis - free backup model (OpenRouter)"),
+    ("ROAST_VISION_OPENROUTER_PREMIUM_MODEL", "Photo analysis - premium model (OpenRouter)"),
+    ("ROAST_VISION_OPENROUTER_PREMIUM_BACKUP_MODEL", "Photo analysis - premium backup model (OpenRouter)"),
 )
 SETTING_KEYS = tuple(key for key, _ in SETTING_FIELDS)
 
