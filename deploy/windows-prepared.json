@@ -1,0 +1,287 @@
+{
+  "schema": 1,
+  "platform": "win_amd64",
+  "installer_version": "1.2.3",
+  "python": {
+    "version": "3.13.16",
+    "url": "https://api.nuget.org/v3-flatcontainer/python/3.13.16/python.3.13.16.nupkg",
+    "sha512": "4c6121b914e95ad4627c3478aff18486683f70632ab7007890e0a4b754215e70a67431370e272dde22c9235c6bb0d4916d71b20b02c485eeaa6b945ddacdfbeb",
+    "bytes": 14817881
+  },
+  "node": {
+    "version": "22.23.4",
+    "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-win-x64.zip",
+    "sha256": "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20"
+  },
+  "mongodb": {
+    "version": "8.0.34",
+    "url": "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-8.0.34.zip",
+    "sha256": "6b021a0864494e4decf278b36477a29eb36072432773e4e62c2f42c302630db0"
+  },
+  "yarn": {
+    "version": "1.22.22",
+    "url": "https://registry.yarnpkg.com/yarn/-/yarn-1.22.22.tgz",
+    "sha512": "a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  },
+  "ffmpeg": {
+    "version": "9.0.2",
+    "source": "GyanD/codexffmpeg essentials via imageio-ffmpeg 0.8.0",
+    "vendor_archive": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
+    "vendor_sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+    "exe_sha256": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec",
+    "native_execution": false
+  },
+  "windows_native_execution_verified": false,
+  "wheels": [
+    {
+      "filename": "annotated_doc-0.0.5-py3-none-any.whl",
+      "sha256": "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101",
+      "bytes": 5302
+    },
+    {
+      "filename": "annotated_types-0.8.0-py3-none-any.whl",
+      "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0",
+      "bytes": 13427
+    },
+    {
+      "filename": "anyio-4.16.0-py3-none-any.whl",
+      "sha256": "c66ae634e0b8228396b801741beb3294326d4b6102f7bba4041c0dfb58c29026",
+      "bytes": 134521
+    },
+    {
+      "filename": "certifi-2026.10.23-py3-none-any.whl",
+      "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1",
+      "bytes": 135082
+    },
+    {
+      "filename": "cffi-2.1.1-cp313-cp313-win_amd64.whl",
+      "sha256": "1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d",
+      "bytes": 185688
+    },
+    {
+      "filename": "charset_normalizer-3.5.2-cp313-cp313-win_amd64.whl",
+      "sha256": "78456a747de8dc58360ffa581f30a002baf5aa28cb262536545e91f113ed7639",
+      "bytes": 206489
+    },
+    {
+      "filename": "click-8.5.1-py3-none-any.whl",
+      "sha256": "8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37",
+      "bytes": 126163
+    },
+    {
+      "filename": "colorama-0.4.6-py2.py3-none-any.whl",
+      "sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+      "bytes": 25335
+    },
+    {
+      "filename": "cryptography-50.0.2-cp311-abi3-win_amd64.whl",
+      "sha256": "7afa5a6602a9f29af1f3a2965f831bae7c9d5d597b7cbb716d41ab3b7d89879c",
+      "bytes": 3824692
+    },
+    {
+      "filename": "distro-1.9.0-py3-none-any.whl",
+      "sha256": "7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2",
+      "bytes": 20277
+    },
+    {
+      "filename": "dnspython-2.9.0-py3-none-any.whl",
+      "sha256": "9a4aedb833c3c1b49214d04d44d3032ab7a9135f7c1d29a549b4ff78fd82fda9",
+      "bytes": 354822
+    },
+    {
+      "filename": "elevenlabs-2.53.0-py3-none-any.whl",
+      "sha256": "c1cb3bce2134ddc42375de77d88a8154c92bef497593ece2634b23e616ef057e",
+      "bytes": 1752582
+    },
+    {
+      "filename": "email_validator-2.3.0-py3-none-any.whl",
+      "sha256": "80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4",
+      "bytes": 35604
+    },
+    {
+      "filename": "fastapi-0.162.2-py3-none-any.whl",
+      "sha256": "d0584f9662317e01140df94c64f4bed1d8b059fe35496e30c9c92f70e6e5ff15",
+      "bytes": 151671
+    },
+    {
+      "filename": "h11-0.16.0-py3-none-any.whl",
+      "sha256": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86",
+      "bytes": 37515
+    },
+    {
+      "filename": "httpcore-1.0.9-py3-none-any.whl",
+      "sha256": "2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55",
+      "bytes": 78784
+    },
+    {
+      "filename": "httpcore2-2.16.0-py3-none-any.whl",
+      "sha256": "5c4358319f2602d984ad93182c9fee5160f22e9da7babdda870a5e7c4e2dc34f",
+      "bytes": 85070
+    },
+    {
+      "filename": "httpx-0.28.1-py3-none-any.whl",
+      "sha256": "d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad",
+      "bytes": 73517
+    },
+    {
+      "filename": "httpx2-2.16.0-py3-none-any.whl",
+      "sha256": "fd2c5d7909e8d86fe92d53020c310ca0e4e431b838c207c5754b9bbf0308d49a",
+      "bytes": 97880
+    },
+    {
+      "filename": "idna-3.20-py3-none-any.whl",
+      "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+      "bytes": 69583
+    },
+    {
+      "filename": "imageio_ffmpeg-0.8.0-py3-none-win_amd64.whl",
+      "sha256": "478a7fbcaeb69b6caceb901cde5768e80d05de6b7f75fd57ae9fe93801de7ba0",
+      "bytes": 38893313
+    },
+    {
+      "filename": "jiter-0.19.0-cp313-cp313-win_amd64.whl",
+      "sha256": "050dd505e407c028aa76b9b4a379a06f79f484c3b256d99a7fea118d863c9a79",
+      "bytes": 223145
+    },
+    {
+      "filename": "motor-3.7.1-py3-none-any.whl",
+      "sha256": "8a63b9049e38eeeb56b4fdd57c3312a6d1f25d01db717fe7d82222393c410298",
+      "bytes": 74996
+    },
+    {
+      "filename": "mutagen-1.48.1-py3-none-any.whl",
+      "sha256": "4f077fe87d3fc7fba259aa63d8c026b18382ca6a42ef37c61e16f1b1b5b82fe7",
+      "bytes": 195706
+    },
+    {
+      "filename": "numpy-2.4.6-cp313-cp313-win_amd64.whl",
+      "sha256": "c4fc99836233ea196540b17ab0983aff60ed07941751930f5f4d05bc3b3b7359",
+      "bytes": 12318598
+    },
+    {
+      "filename": "openai-1.99.9-py3-none-any.whl",
+      "sha256": "9dbcdb425553bae1ac5d947147bebbd630d91bbfc7788394d4c4f3a35682ab3a",
+      "bytes": 786816
+    },
+    {
+      "filename": "opentelemetry_api-1.45.2-py3-none-any.whl",
+      "sha256": "2cbd737377e710ee740d261c94e93fa0f08e6d037c18f17513cc0a2d94479a34",
+      "bytes": 60335
+    },
+    {
+      "filename": "packaging-26.3-py3-none-any.whl",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+      "bytes": 129956
+    },
+    {
+      "filename": "pillow-13.0.0-cp313-cp313-win_amd64.whl",
+      "sha256": "9dda0788a9932776a75d8bcc020076edc308ce2508b51f6739a45e3158b3fc42",
+      "bytes": 7284777
+    },
+    {
+      "filename": "pycparser-3.12-py3-none-any.whl",
+      "sha256": "a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e",
+      "bytes": 62600
+    },
+    {
+      "filename": "pydantic-2.14.1-py3-none-any.whl",
+      "sha256": "9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454",
+      "bytes": 488106
+    },
+    {
+      "filename": "pydantic_core-2.50.1-cp313-cp313-win_amd64.whl",
+      "sha256": "7816e98acc08119dc0f340ab167048ecc54126316330c1f0caf7c6756c88e28f",
+      "bytes": 2170840
+    },
+    {
+      "filename": "pymongo-4.18.3-cp313-cp313-win_amd64.whl",
+      "sha256": "6fed3281c93aafb79748c9448f32a1658a870499f09c0d70129f153c1a5833ef",
+      "bytes": 822114
+    },
+    {
+      "filename": "python_dotenv-1.2.4-py3-none-any.whl",
+      "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc",
+      "bytes": 23266
+    },
+    {
+      "filename": "python_multipart-0.0.32-py3-none-any.whl",
+      "sha256": "ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23",
+      "bytes": 30042
+    },
+    {
+      "filename": "requests-2.34.2-py3-none-any.whl",
+      "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "bytes": 73075
+    },
+    {
+      "filename": "sniffio-1.3.1-py3-none-any.whl",
+      "sha256": "2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2",
+      "bytes": 10235
+    },
+    {
+      "filename": "starlette-1.10.0-py3-none-any.whl",
+      "sha256": "478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4",
+      "bytes": 80571
+    },
+    {
+      "filename": "stripe-14.4.2-py3-none-any.whl",
+      "sha256": "a6bb67ae9aba2e537243ed502c148a6bda4fc714d6c8b431d660690c1548ce20",
+      "bytes": 1997764
+    },
+    {
+      "filename": "tqdm-4.70.1-py3-none-any.whl",
+      "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+      "bytes": 80199
+    },
+    {
+      "filename": "truststore-0.10.5-py3-none-any.whl",
+      "sha256": "9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c",
+      "bytes": 19017
+    },
+    {
+      "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+      "bytes": 45571
+    },
+    {
+      "filename": "typing_inspection-0.4.5-py3-none-any.whl",
+      "sha256": "bc210535442b39e1bf2805e0c7a17dfd6a4ace760c84c7f7d16245d23a6b1c39",
+      "bytes": 14874
+    },
+    {
+      "filename": "urllib3-2.8.0-py3-none-any.whl",
+      "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+      "bytes": 135717
+    },
+    {
+      "filename": "uvicorn-0.54.0-py3-none-any.whl",
+      "sha256": "505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf",
+      "bytes": 87427
+    },
+    {
+      "filename": "vercel_blob-0.5.1-py3-none-any.whl",
+      "sha256": "376fbc2ac31e649747adb490a6a67d6afaf87cc348d62bac465b2c601353af34",
+      "bytes": 36163
+    },
+    {
+      "filename": "vercel_headers-0.7.2-py3-none-any.whl",
+      "sha256": "26dcb0016b5c553e638385e532cb8557f071e247b46f2575d5737e48718dc8c6",
+      "bytes": 3922
+    },
+    {
+      "filename": "vercel_internal_core-0.2.2-py3-none-any.whl",
+      "sha256": "581b02309ec8d6367134c3ecabba5d8169a902677458e228f544dc88dfa05a6b",
+      "bytes": 24767
+    },
+    {
+      "filename": "vercel_oidc-0.11.0-py3-none-any.whl",
+      "sha256": "5a106197178807b5f30c71ccbc75e97a6a6e8428de31f37658f95456d8febe06",
+      "bytes": 17045
+    },
+    {
+      "filename": "websockets-17.4-cp313-cp313-win_amd64.whl",
+      "sha256": "203e42eb77e06f85778a908b34c5ad032f34e98a68ef33920d6685c1e65a9420",
+      "bytes": 219560
+    }
+  ]
+}

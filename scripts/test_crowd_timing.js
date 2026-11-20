@@ -1,0 +1,24 @@
+// Offline logic checks against the actual crowd engine; no audio devices or network.
+const fs = require('fs');
+const vm = require('vm');
+const assert = require('assert');
+const source = fs.readFileSync('frontend/src/lib/crowdEngine.js','utf8').replace('export const crowd = new CrowdEngine();','globalThis.testCrowd = new CrowdEngine();');
+const sandbox = {Math, setTimeout}; vm.createContext(sandbox); vm.runInContext(source, sandbox);
+const c = sandbox.testCrowd;
+const starts = [];
+const gain = () => ({gain: {value: 1, setValueAtTime(){}, exponentialRampToValueAtTime(){}, cancelScheduledValues(){}, linearRampToValueAtTime(){}}, connect(){ return this; }});
+c.ctx = {currentTime: 0, createBufferSource(){ return {playbackRate:{}, connect(){ return this; }, start(){ starts.push(this.buffer.id); }, stop(){}}; }, createGain: gain};
+c.speechBus = gain(); c.musicBus = gain(); c.musicDuck = gain();
+c.buffers.rap_beat = {id:'rap'};
+c.startBeat(); assert(c.beat && starts[0] === 'rap');
+c.ctx.currentTime = 0.2; assert(c.msToBeat() > 400 && c.msToBeat() < 500);
+c.duck(); c.setBeatVolume(0.3); c.stopBeat(); assert.strictEqual(c.beat, null); starts.length = 0;
+c.buffers.chuckle_1 = {id:'one'}; c.buffers.chuckle_2 = {id:'two'};
+c.play('small'); c.play('small'); c.play('small');
+assert.notStrictEqual(starts[0],starts[1]); assert.strictEqual(starts[0],starts[2]);
+let triggered = []; c.play = (bank, options) => { triggered.push([bank, options]); };
+const normal = c.react('big','laugh'); assert(normal > 2100 && triggered[0][1].delay >= 170);
+const tag = c.react('big','laugh',{nextIsTag:true}); assert(tag < normal);
+const rapid = c.react('big','laugh',{rapidFire:true}); assert(rapid <= 900);
+assert(c.react('none','cheer') >= 1000);
+console.log('PASS: alternating samples, post-line landing, hold, tag, rapid-fire, reaction-only hold');

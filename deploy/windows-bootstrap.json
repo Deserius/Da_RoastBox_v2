@@ -1,0 +1,6 @@
+{
+  "python_version": "3.13.16",
+  "python_windows_x64_sha256": "fb4f9f5d438b2396da0086dc70b935c530cb578e37adc6d354f7ad2037fee83b",
+  "python_release_source": "https://www.python.org/downloads/release/python-31316/",
+  "purpose": "Install the official per-user x64 Python runtime only when no supported interpreter exists. No provider credentials or customer data."
+}

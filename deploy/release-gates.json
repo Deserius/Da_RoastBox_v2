@@ -1,0 +1,22 @@
+{
+  "purpose": "Evidence-backed launch checklist, not an automatic security certification. Never mark verified from configuration presence alone.",
+  "gates": [
+    {"id": "private_export_exclusions", "profiles": ["beta", "production"], "status": "verified", "evidence": "backend/scripts/test_security_hardening.py; offline export fixtures pass"},
+    {"id": "candidate_security_regressions", "profiles": ["beta", "production"], "status": "verified", "evidence": "20 offline security tests; candidate dependencies; see docs/RELEASE_READINESS.md"},
+    {"id": "independent_backend_host", "profiles": ["beta", "production"], "status": "blocked", "evidence": "No external Python/Mongo backend is deployed; Vercel beta is a setup page only"},
+    {"id": "persistent_database_and_private_media", "profiles": ["beta", "production"], "status": "blocked", "evidence": "Workspace Mongo and local media remain preserved; external durable stores are not provisioned or migrated"},
+    {"id": "beta_gate_real_origin_validation", "profiles": ["beta"], "status": "not_verified", "evidence": "Extra-password middleware tested locally; external HTTPS/origin/proxy/cookie deployment is not tested"},
+    {"id": "external_google_and_email_auth", "profiles": ["beta", "production"], "status": "not_verified", "evidence": "Google and preview work in existing local preview; new public origin and optional SMTP are unverified"},
+    {"id": "external_media_and_reel_delivery", "profiles": ["beta", "production"], "status": "not_verified", "evidence": "No real-device external-origin generation/media/reel proof for the beta deployment"},
+    {"id": "production_auth_and_csrf_review", "profiles": ["production"], "status": "not_verified", "evidence": "Preview transports remain for compatibility; review production session storage, reauthentication and CSRF end to end"},
+    {"id": "historical_data_reconciliation", "profiles": ["production"], "status": "blocked", "evidence": "Available recovered data is not the complete historical native database; never overwrite native data"},
+    {"id": "idempotent_jobs_and_accounting", "profiles": ["production"], "status": "blocked", "evidence": "Durable job ownership and end-to-end submission idempotency remain incomplete; keep one worker"},
+    {"id": "encrypted_backup_restore_rehearsal", "profiles": ["production"], "status": "not_verified", "evidence": "Source preservation copies are not proof of database/media disaster recovery"},
+    {"id": "live_web_billing_review", "profiles": ["production"], "status": "blocked", "evidence": "Stripe remains TEST-only; live key/webhook/tax/refund/terms review and explicit launch authorization are pending"},
+    {"id": "privacy_deletion_and_ai_reporting", "profiles": ["production"], "status": "blocked", "evidence": "No complete audited account-deletion or AI-content-reporting workflow; policies and retention need owner/legal review"},
+    {"id": "store_content_and_billing_compliance", "profiles": ["production"], "status": "blocked", "evidence": "Adult/profanity policy conflicts; app-store billing route, package signing, developer enrollment and testing are unresolved"},
+    {"id": "full_dependency_supply_chain_review", "profiles": ["production"], "status": "not_verified", "evidence": "Exact declared PyPI pins checked via OSV; custom wheel/transitive dependencies and frontend supply chain require complete review"},
+    {"id": "monitoring_and_incident_owner", "profiles": ["production"], "status": "not_verified", "evidence": "Request IDs/structured local audit logs implemented; centralized retention, alerts and owner escalation are not configured"},
+    {"id": "commercial_hosting_terms_and_costs", "profiles": ["production"], "status": "blocked", "evidence": "Existing free test scope does not authorize paid hosting or establish commercial-production hosting eligibility"}
+  ]
+}
