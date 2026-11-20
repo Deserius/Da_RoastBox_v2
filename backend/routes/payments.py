@@ -24,7 +24,8 @@ from emergentintegrations.payments.stripe.checkout import (
 from auth_deps import get_current_user, active_plan_tier
 from models import User, PaymentTransaction, CreditTransaction
 from db import users_collection, payments_collection, credits_collection, roasts_collection
-from config import STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_TEST_ONLY, APP_BASE_URL
+from config import STRIPE_TEST_ONLY, APP_BASE_URL
+from services.runtime_settings import secret_cached
 from services.pricing import PRODUCT_CATALOG, ROAST_COSTS, VIP_CREDIT_DISCOUNT, compute_roast_cost  # noqa: F401
 from services.roast_engine import VISIBLE_BILLING
 
@@ -68,11 +69,14 @@ def _checkout_origin(value: str, request_origin: str | None) -> str:
 
 
 def _checkout(host_url: str | None = None) -> StripeCheckout:
-    if not STRIPE_API_KEY:
+    stripe_key = secret_cached("STRIPE_API_KEY")
+    if not stripe_key:
         raise HTTPException(status_code=503, detail="Stripe is not configured. Add STRIPE_API_KEY to the backend environment.")
-    if STRIPE_TEST_ONLY and not STRIPE_API_KEY.startswith(("sk_test_", "rk_test_")):
+    if STRIPE_TEST_ONLY and not stripe_key.startswith(("sk_test_", "rk_test_")):
         raise HTTPException(status_code=503, detail="Stripe test-only mode requires a test secret key.")
-    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_secret=STRIPE_WEBHOOK_SECRET or None, webhook_url=host_url)
+    return StripeCheckout(api_key=stripe_key,
+                          webhook_secret=secret_cached("STRIPE_WEBHOOK_SECRET") or None,
+                          webhook_url=host_url)
 
 
 @router.get("/packs")
@@ -119,7 +123,7 @@ async def create_checkout(body: CheckoutRequest, request: Request, current_user:
         raise HTTPException(status_code=400, detail="Invalid pack")
     if pack["type"] == "plus_subscription" and current_user.plan_tier == "vip":
         raise HTTPException(status_code=400, detail="Your active VIP pass already includes Plus. Choose VIP to extend it.")
-    if not STRIPE_API_KEY or not STRIPE_WEBHOOK_SECRET:
+    if not secret_cached("STRIPE_API_KEY") or not secret_cached("STRIPE_WEBHOOK_SECRET"):
         raise HTTPException(status_code=503, detail="Stripe checkout requires both STRIPE_API_KEY and STRIPE_WEBHOOK_SECRET on the server.")
 
     # VIP gets 10% off credit packs
@@ -364,7 +368,7 @@ async def payment_status(session_id: str, current_user: User = Depends(get_curre
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
     # The upstream SDK otherwise parses unsigned payloads, letting anyone forge a paid event.
-    if not STRIPE_WEBHOOK_SECRET:
+    if not secret_cached("STRIPE_WEBHOOK_SECRET"):
         raise HTTPException(status_code=503, detail="Stripe webhook signing secret is not configured.")
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")

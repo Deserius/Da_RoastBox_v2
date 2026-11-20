@@ -11,6 +11,7 @@ from pymongo.errors import DuplicateKeyError
 
 from auth_deps import get_current_user, get_optional_user
 from config import DATA_DIR, EMERGENT_LLM_KEY, OPENAI_API_KEY, ELEVENLABS_API_KEY
+from services.runtime_settings import secret_cached
 from db import (users_collection, voice_previews_collection, voice_preview_samples_collection,
                 voice_preview_leases_collection)
 from models import User
@@ -118,7 +119,10 @@ async def voice_preview(persona_id: str, sample: int = Query(0, ge=0), current_u
                     byok_openai, byok_eleven = eng.user_byok(current_user)
                     preview = bool(current_user.is_preview)
                     premium = bool(eng.has_premium_voices(current_user) and not preview)
-                    hosted_available = not preview and (EMERGENT_LLM_KEY or OPENAI_API_KEY or (premium and ELEVENLABS_API_KEY))
+                    hosted_available = not preview and bool(
+                        EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
+                        or OPENAI_API_KEY or secret_cached("OPENAI_API_KEY")
+                        or (premium and (ELEVENLABS_API_KEY or secret_cached("ELEVENLABS_API_KEY"))))
                     preview_hosted = False
                     if preview and not (byok_openai or byok_eleven):
                         await consume_preview_hosted("voice")

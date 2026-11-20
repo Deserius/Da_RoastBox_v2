@@ -20,6 +20,9 @@ preview_usage_collection = db["preview_hosted_usage"]
 email_credentials_collection = db["email_credentials"]
 email_tokens_collection = db["email_tokens"]
 email_rate_limits_collection = db["email_auth_rate_limits"]
+# Operator-entered provider credentials. Values are Fernet-encrypted; the
+# environment always wins when it already defines a non-empty value.
+runtime_settings_collection = db["runtime_settings"]
 
 
 async def ensure_indexes():

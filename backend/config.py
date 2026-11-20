@@ -139,6 +139,19 @@ PREVIEW_HOSTED_DAILY_VOICE_LIMIT = int(os.environ.get("PREVIEW_HOSTED_DAILY_VOIC
 # Preview accounts cannot buy credits, so this removes the credit requirement
 # (and the debit) for them. Off by default for any deployment that bills users.
 PREVIEW_UNLIMITED_CREDITS = _flag("PREVIEW_UNLIMITED_CREDITS")
+# Owner settings console: lets an operator enter provider credentials from the
+# running app instead of hand-editing the environment. Intended for a disposable
+# preview only; it always requires a shared passphrase and is never on by default.
+ALLOW_RUNTIME_SETTINGS = _flag("ALLOW_RUNTIME_SETTINGS")
+# Shared passphrase for the settings console. Empty = console cannot be unlocked.
+RUNTIME_SETTINGS_PASSPHRASE = os.environ.get("RUNTIME_SETTINGS_PASSPHRASE", "").strip()
+# Optional comma-separated user ids/emails allowed to open the console. Empty =
+# any signed-in preview/test account may, once it has the passphrase.
+RUNTIME_SETTINGS_ADMINS = tuple(
+    value.strip().lower()
+    for value in os.environ.get("RUNTIME_SETTINGS_ADMINS", "").split(",")
+    if value.strip()
+)
 STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "emergent").strip().lower()
 if STORAGE_BACKEND not in ("emergent", "local", "vercel_blob"):
     raise ValueError("STORAGE_BACKEND must be emergent, local or vercel_blob")

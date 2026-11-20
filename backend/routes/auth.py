@@ -17,7 +17,7 @@ from pymongo.errors import DuplicateKeyError
 from db import users_collection, sessions_collection
 from models import User
 from auth_deps import get_current_user, validate_cookie_origin
-from config import ALLOW_DEV_LOGIN, ENABLE_PREVIEW_LOGIN
+from config import ALLOW_DEV_LOGIN, ENABLE_PREVIEW_LOGIN, PREVIEW_UNLIMITED_CREDITS
 from services.app_sessions import issue_app_session
 
 log = logging.getLogger(__name__)
@@ -120,6 +120,9 @@ async def me(current_user: User = Depends(get_current_user)):
         "name": current_user.name,
         "picture": current_user.picture,
         "credits": current_user.credits,
+        # Preview accounts on an unlimited preview cannot spend down credits, so
+        # the UI shows an explicit "unlimited" state instead of a finite number.
+        "unlimited_credits": bool(current_user.is_preview and PREVIEW_UNLIMITED_CREDITS),
         "is_preview": current_user.is_preview,
         "has_byok_openai": current_user.has_byok_openai,
         "has_byok_elevenlabs": current_user.has_byok_elevenlabs,

@@ -78,6 +78,12 @@ def configuration_errors(env: Mapping[str, str]) -> list[str]:
         errors.append("CORS_REQUIRES_EXPLICIT_HTTPS_ORIGINS")
     if s.paid_diagnostics and not s.diagnostics_admins:
         errors.append("PAID_DIAGNOSTICS_REQUIRE_EXPLICIT_ADMIN_IDS")
+    if enabled(env.get("ALLOW_RUNTIME_SETTINGS")):
+        # A console that accepts provider secrets must never face real customers.
+        if s.environment == "production":
+            errors.append("RUNTIME_SETTINGS_FORBIDDEN_IN_PRODUCTION")
+        if not (env.get("RUNTIME_SETTINGS_PASSPHRASE") or "").strip():
+            errors.append("RUNTIME_SETTINGS_REQUIRES_PASSPHRASE")
     if s.environment == "production":
         for key in ("ENABLE_PREVIEW_LOGIN", "ALLOW_PREVIEW_HOSTED_AI", "PREVIEW_UNLIMITED_CREDITS"):
             if enabled(env.get(key)):

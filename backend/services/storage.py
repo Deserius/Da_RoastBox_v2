@@ -13,8 +13,9 @@ from typing import Optional, Tuple
 
 import requests
 
+from services.runtime_settings import secret_cached
 from config import (
-    EMERGENT_LLM_KEY, INTEGRATION_PROXY_URL, AUDIO_DIR,
+    INTEGRATION_PROXY_URL, AUDIO_DIR,
     STORAGE_BACKEND, LOCAL_STORAGE_DIR,
 )
 
@@ -28,9 +29,10 @@ def _init(force: bool = False) -> str:
     global _storage_key
     if _storage_key and not force:
         return _storage_key
-    if not EMERGENT_LLM_KEY:
+    emergent_key = secret_cached("EMERGENT_LLM_KEY")
+    if not emergent_key:
         raise RuntimeError("EMERGENT_LLM_KEY is required for Emergent Object Storage")
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": emergent_key}, timeout=30)
     resp.raise_for_status()
     _storage_key = resp.json()["storage_key"]
     return _storage_key

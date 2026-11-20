@@ -11,13 +11,20 @@ from pymongo.errors import DuplicateKeyError
 from config import (ALLOW_PREVIEW_HOSTED_AI, ENABLE_PREVIEW_LOGIN,
                     EMERGENT_LLM_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, ROAST_WRITER_PROVIDER,
                     PREVIEW_HOSTED_DAILY_SHOW_LIMIT, PREVIEW_HOSTED_DAILY_VOICE_LIMIT)
+from services.runtime_settings import secret_cached
 from db import preview_usage_collection
 
 
 async def consume_preview_hosted(kind: str) -> None:
     if not ENABLE_PREVIEW_LOGIN or not ALLOW_PREVIEW_HOSTED_AI:
         raise HTTPException(status_code=503, detail="Preview accounts need their own OpenAI API key in Settings; hosted AI is disabled for this preview.")
-    if not (EMERGENT_LLM_KEY or OPENAI_API_KEY or (kind == "show" and ROAST_WRITER_PROVIDER == "openrouter" and OPENROUTER_API_KEY)):
+    # Module constants remain primary (tests and deploy-time config patch these);
+    # the settings console only supplies a key the environment left empty.
+    any_key = (EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
+               or OPENAI_API_KEY or secret_cached("OPENAI_API_KEY")
+               or (kind == "show" and ROAST_WRITER_PROVIDER == "openrouter"
+                   and (OPENROUTER_API_KEY or secret_cached("OPENROUTER_API_KEY"))))
+    if not any_key:
         raise HTTPException(status_code=503, detail="No hosted AI key is configured. Add your own OpenAI key in Settings.")
     if kind == "show":
         limit = PREVIEW_HOSTED_DAILY_SHOW_LIMIT

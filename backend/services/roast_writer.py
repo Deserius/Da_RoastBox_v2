@@ -16,6 +16,7 @@ import re
 from typing import Dict, List, Optional
 
 from .openai_service import get_client, get_emergent_client
+from services.runtime_settings import secret_cached, setting_cached
 from config import (EMERGENT_LLM_KEY, OPENAI_API_KEY, AI_DEFAULT_PROVIDER, ROAST_WRITER_PROVIDER,
                     OPENROUTER_API_KEY, ROAST_WRITER_MODEL, ROAST_FREE_WRITER_ONLY,
                     ROAST_FREE_BACKUP_MODEL, ROAST_POLLINATIONS_FALLBACK, ROAST_ALLOW_PAID_WRITER_FALLBACK,
@@ -630,10 +631,11 @@ async def _generate_script_text(client, *, model, messages, max_tokens, routing,
 
 
 def _creative_client():
-    if not OPENROUTER_API_KEY or not ROAST_WRITER_MODEL:
+    key = OPENROUTER_API_KEY or secret_cached("OPENROUTER_API_KEY")
+    if not key or not ROAST_WRITER_MODEL:
         raise RuntimeError("OpenRouter writer is selected but not configured")
     # Fixed trusted endpoint; do not send an OpenAI BYOK key to a third party.
-    return OpenAI(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1", timeout=40.0, max_retries=0)
+    return OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1", timeout=40.0, max_retries=0)
 
 
 async def write_script(user_block: str, personas: List[Dict], images: List[bytes], image_types: List[str],
@@ -645,11 +647,18 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
     caller can begin voice work before the whole script has finished."""
     persona_portraits = persona_portraits or []
     pipeline_start = time.monotonic()
+    # Resolved per call so a key or provider entered in the settings console
+    # applies to the next show without restarting the server.
+    # Module-level constants stay the primary source so existing tests and any
+    # deploy-time declaration behave exactly as before; the settings console only
+    # fills a gap the environment left empty.
+    writer_provider = setting_cached("ROAST_WRITER_PROVIDER", ROAST_WRITER_PROVIDER)
+    openrouter_key = OPENROUTER_API_KEY or secret_cached("OPENROUTER_API_KEY")
     # OpenRouter is the default provider, but a missing key must not block a show
     # when an existing OpenAI/Emergent provider is available.
-    if ROAST_WRITER_PROVIDER == "openrouter" and not OPENROUTER_API_KEY:
-        log.warning("OpenRouter writer selected without OPENROUTER_API_KEY; using the existing provider")
-    if ROAST_WRITER_PROVIDER == "openrouter" and OPENROUTER_API_KEY:
+    if writer_provider == "openrouter" and not openrouter_key:
+        log.warning("OpenRouter writer selected without an OpenRouter key; using the existing provider")
+    if writer_provider == "openrouter" and openrouter_key:
         # The explicit creative profile cannot bypass the free-only spending guard.
         if ROAST_WRITER_PROFILE == "creative" and ROAST_FREE_WRITER_ONLY:
             raise RuntimeError("Creative profile requires free-only mode to be disabled")
@@ -673,7 +682,8 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
         except Exception as e:
             log.warning("OpenRouter writer configuration failed (%s)", type(e).__name__)
             primary_client = None
-        allow_emergent = ROAST_ALLOW_PAID_WRITER_FALLBACK and not ROAST_FREE_WRITER_ONLY and bool(EMERGENT_LLM_KEY)
+        allow_emergent = (ROAST_ALLOW_PAID_WRITER_FALLBACK and not ROAST_FREE_WRITER_ONLY
+                          and bool(EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")))
         if not primary_client and not ROAST_POLLINATIONS_FALLBACK and not allow_emergent:
             raise RuntimeError("No writer is configured")
         visual_bytes = list(images) + [p["data"] for p in persona_portraits]
@@ -788,13 +798,15 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
         image_content.extend(_image_parts([portrait["data"]], [portrait["type"]]))
     messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": image_content}]
     # Direct OpenAI cannot call Claude; the original Emergent gateway keeps the full chain.
-    direct_openai = bool(byok_key or (OPENAI_API_KEY and (AI_DEFAULT_PROVIDER == "openai" or not EMERGENT_LLM_KEY)))
+    openai_key = OPENAI_API_KEY or secret_cached("OPENAI_API_KEY")
+    emergent_key = EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
+    direct_openai = bool(byok_key or (openai_key and (AI_DEFAULT_PROVIDER == "openai" or not emergent_key)))
     models = [m for m in MODEL_CHAIN if not m.startswith("claude")] if direct_openai else MODEL_CHAIN
     text = ""
     for model in models:
         try:
             resp = await asyncio.to_thread(client.chat.completions.create, model=model, messages=messages,
-                                           temperature=0.95 if (model.startswith("claude") or ROAST_WRITER_PROVIDER == "openrouter") else 1.05, max_tokens=6000)
+                                           temperature=0.95 if (model.startswith("claude") or writer_provider == "openrouter") else 1.05, max_tokens=6000)
             cand = (resp.choices[0].message.content or "").strip()
             log.info("Script model=%s len=%d", model, len(cand))
             if not cand or (len(cand) < 250 and any(m in cand.lower() for m in REFUSAL_MARKERS)):

@@ -135,6 +135,11 @@ backend/media_tmp/
 **/*.env.*
 !**/.env.example
 !**/*.env.example
+# The frontend dev server's .env holds only proxy/binding settings and is
+# committed so a fresh clone runs immediately. It must never contain a secret;
+# provider credentials belong in the backend environment or the settings console.
+!frontend/.env
+
 
 # Prepared Windows binaries are a downloadable artifact, not cloud source.
 runtime/

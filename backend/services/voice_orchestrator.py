@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 from config import (AUDIO_DIR, ELEVENLABS_API_KEY, ROAST_TTS_CACHE, ROAST_TTS_CONCURRENCY,
                     ROAST_TTS_TIMEOUT_S)
+from services.runtime_settings import secret_cached
 from .openai_service import synthesize_tts_openai
 from .elevenlabs_service import synthesize_tts_elevenlabs
 from .storage import save_audio
@@ -107,7 +108,8 @@ async def synthesize_line(text: str, persona_id: str, persona_meta: Optional[dic
     meta = persona_meta or {}
     audio: Optional[bytes] = None
     provider = "none"
-    eleven_key = user_elevenlabs_key or (ELEVENLABS_API_KEY if premium_voices_unlocked else None)
+    shared_eleven = ELEVENLABS_API_KEY or secret_cached("ELEVENLABS_API_KEY")
+    eleven_key = user_elevenlabs_key or (shared_eleven if premium_voices_unlocked else None)
     if eleven_key:
         try:
             tag = ELEVEN_TAGS.get((beat or {}).get("emotion") or "", "")

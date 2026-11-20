@@ -19,9 +19,10 @@ from models import User
 from services.voice_orchestrator import prune_audio_cache
 from services.roast_engine import VISIBLE_BILLING, recover_interrupted_generations
 from services.storage import init_storage
+from services import runtime_settings as runtime_settings_service
 from services.audio_mastering import load_voice_audio
 from routes.reels import recover_interrupted_reels
-from routes import auth, email_auth, personas, roast, battle, share, reels, payments, voice_settings, download, diagnostics, session_tunnel
+from routes import auth, email_auth, personas, roast, battle, share, reels, payments, voice_settings, download, diagnostics, session_tunnel, settings as settings_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -59,7 +60,7 @@ async def serve_audio(filename: str, current_user: Optional[User] = Depends(get_
     return Response(content=data, media_type="audio/mpeg", headers={"Cache-Control": "private, no-store"})
 
 
-for module in (diagnostics, auth, email_auth, personas, roast, battle, share, reels, payments, voice_settings, download, session_tunnel):
+for module in (diagnostics, auth, email_auth, personas, roast, battle, share, reels, payments, voice_settings, download, session_tunnel, settings_routes):
     api_router.include_router(module.router)
 
 app.include_router(api_router)
@@ -124,6 +125,9 @@ async def _payment_recovery_loop():
 async def _startup():
     global _generation_recovery_task, _payment_recovery_task
     await ensure_indexes()
+    # Load any console-entered credentials so synchronous provider paths see
+    # them on the very first request rather than after the first write.
+    await runtime_settings_service.hydrate()
     storage_ready = await init_storage()
     if RUNTIME_SECURITY.release_mode and not storage_ready:
         raise RuntimeError("Durable media storage is unavailable; release startup refused")

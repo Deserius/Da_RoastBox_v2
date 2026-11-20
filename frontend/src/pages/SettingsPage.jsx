@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "@/lib/ToastContext";
+import ProviderConsole from "@/components/ProviderConsole";
 
 export default function SettingsPage() {
   const { user, refresh } = useAuth();
@@ -62,7 +63,15 @@ export default function SettingsPage() {
       <div className="panel" style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
         <h2>Account</h2>
         <p>Signed in as <strong>{user?.email}</strong></p>
-        <p>Current credits: <strong>{user?.credits ?? 0}</strong></p>
+        <p>
+          Current credits:{" "}
+          <strong data-testid="credit-balance">
+            {user?.unlimited_credits ? "Unlimited (preview)" : (user?.credits ?? 0)}
+          </strong>
+        </p>
+
+        <div className="divider" />
+        <ProviderConsole />
 
         <div className="divider" />
         <h2>Service Configuration</h2>
