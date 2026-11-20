@@ -1,8 +1,12 @@
-"""Authentication via Emergent Managed Google Auth.
+"""Authentication via a direct Google OAuth 2.0 authorization-code flow.
 
-The frontend uses the original managed Google consent service. Emergent returns a
-short-lived session_id in the callback fragment; the backend exchanges it with the
-original provider endpoint, then issues a separate, revocable app session.
+No third-party broker sits between this app and Google: the frontend sends the
+user straight to accounts.google.com using the operator's own Google Cloud
+OAuth client (Settings -> Connect your services), and this module exchanges
+the authorization code Google returns directly with Google's own token
+endpoint. The consent screen the user sees is the operator's own app, never a
+vendor's. A separate, revocable app session is issued afterwards; Google's own
+tokens are never stored or reused as this app's session credential.
 """
 import secrets
 import re
@@ -18,65 +22,40 @@ from db import users_collection, sessions_collection
 from models import User
 from auth_deps import get_current_user, validate_cookie_origin
 from config import (ALLOW_DEV_LOGIN, ENABLE_PREVIEW_LOGIN, PREVIEW_UNLIMITED_CREDITS,
-                    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_AUTH_URL, GOOGLE_SESSION_URL)
+                    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, GOOGLE_TOKENINFO_URL)
 from services.app_sessions import issue_app_session
+from services.runtime_settings import secret_cached, setting_cached
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-from services.runtime_settings import secret_cached, setting_cached
+
+def _google_credentials() -> tuple[str, str]:
+    """The operator's own Google OAuth client, env first then console value."""
+    return secret_cached("GOOGLE_CLIENT_ID") or GOOGLE_CLIENT_ID, \
+        secret_cached("GOOGLE_CLIENT_SECRET") or GOOGLE_CLIENT_SECRET
 
 
-def _session_url() -> str:
-    """Session-exchange endpoint. Console override first, then config default."""
-    return setting_cached("GOOGLE_SESSION_URL", GOOGLE_SESSION_URL)
+@router.get("/google/config")
+async def google_config():
+    """Public, non-secret info the frontend needs to build the consent URL.
+
+    The client ID is not a secret (Google documents it as safe to embed in a
+    browser); only the client secret stays server-side.
+    """
+    client_id, client_secret = _google_credentials()
+    return {
+        "configured": bool(client_id and client_secret),
+        "client_id": client_id or None,
+        "auth_url": setting_cached("GOOGLE_AUTH_URL", GOOGLE_AUTH_URL),
+    }
 
 
-class SessionRequest(BaseModel):
-    session_id: str = Field(min_length=1, max_length=4096)
-
-
-@router.post("/session")
-async def create_session(body: SessionRequest, response: Response):
-    """Exchange the managed provider's one-time ID for a local app session."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        try:
-            r = await client.get(
-                _session_url(),
-                headers={"X-Session-ID": body.session_id},
-            )
-        except httpx.RequestError:
-            log.warning("Google sign-in provider is unreachable", exc_info=True)
-            raise HTTPException(status_code=502, detail="Sign-in provider is unavailable")
-        if r.status_code != 200:
-            if 400 <= r.status_code < 500:
-                raise HTTPException(status_code=401, detail="Sign-in session is invalid or expired")
-            log.warning("Google sign-in provider returned HTTP %s", r.status_code)
-            raise HTTPException(status_code=502, detail="Sign-in provider is unavailable")
-        try:
-            data = r.json()
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=502, detail="Sign-in provider returned an invalid response")
-
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=502, detail="Sign-in provider returned an invalid response")
-    email = data.get("email")
-    provider_token = data.get("session_token")
-    if (not isinstance(email, str) or not email.strip() or "@" not in email
-            or len(email) > 320 or any(ch.isspace() for ch in email.strip())):
-        raise HTTPException(status_code=502, detail="Sign-in provider returned an incomplete profile")
+async def _finish_identity(email: str, name: Optional[str], picture: Optional[str], response: Response) -> dict:
+    """Common tail for any verified-identity login: match/create the account,
+    refresh profile fields, and issue a fresh revocable app session."""
     email = email.strip().casefold()
-    if not isinstance(provider_token, str) or not provider_token.strip():
-        raise HTTPException(status_code=502, detail="Sign-in provider returned an incomplete session")
-    # Emergent's current contract does not always include this flag. If it does,
-    # never link an explicitly unverified identity to an existing account.
-    verified = data.get("email_verified")
-    if verified is False or (isinstance(verified, str) and verified.lower() == "false"):
-        raise HTTPException(status_code=401, detail="Google email address is not verified")
-
-    name = data.get("name") if isinstance(data.get("name"), str) else None
-    picture = data.get("picture") if isinstance(data.get("picture"), str) else None
     # Preserve legacy mixed-case Google accounts. Never merge if an old
     # database already contains two accounts differing only by email case.
     matches = await users_collection.find({"email": re.compile(r"^" + re.escape(email) + r"$", re.IGNORECASE)}).limit(2).to_list(length=2)
@@ -106,8 +85,8 @@ async def create_session(body: SessionRequest, response: Response):
         )
         user.name, user.picture = name, picture
 
-    # Do not expose the provider's credential as our application session. Existing
-    # session records still work; new logins receive a fresh, revocable random token.
+    # Do not expose Google's own token as our application session. New logins
+    # receive a fresh, revocable random token instead.
     session_token = await issue_app_session(user.id, response)
     return {
         "user": {
@@ -116,6 +95,84 @@ async def create_session(body: SessionRequest, response: Response):
         },
         "session_token": session_token,
     }
+
+
+class GoogleExchangeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    redirect_uri: str = Field(min_length=1, max_length=2048)
+
+
+@router.post("/google/exchange")
+async def google_exchange(body: GoogleExchangeRequest, response: Response):
+    """Trade Google's one-time authorization code for the signed-in identity.
+
+    ``redirect_uri`` must be byte-for-byte the same URI used to start the
+    authorization request - Google's token endpoint rejects the exchange
+    otherwise. The client secret never leaves this server.
+    """
+    client_id, client_secret = _google_credentials()
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Google sign-in is not configured. Add a Google OAuth client ID and secret in Settings.",
+        )
+
+    token_url = setting_cached("GOOGLE_TOKEN_URL", GOOGLE_TOKEN_URL)
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.post(token_url, data={
+                "code": body.code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": body.redirect_uri,
+                "grant_type": "authorization_code",
+            })
+        except httpx.RequestError:
+            log.warning("Google's token endpoint is unreachable", exc_info=True)
+            raise HTTPException(status_code=502, detail="Google sign-in is unavailable right now")
+        if r.status_code != 200:
+            if 400 <= r.status_code < 500:
+                raise HTTPException(status_code=401, detail="Your Google sign-in expired or could not be verified")
+            log.warning("Google's token endpoint returned HTTP %s", r.status_code)
+            raise HTTPException(status_code=502, detail="Google sign-in is unavailable right now")
+        try:
+            token_data = r.json()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=502, detail="Google returned an invalid token response")
+
+        id_token = token_data.get("id_token") if isinstance(token_data, dict) else None
+        if not isinstance(id_token, str) or not id_token:
+            raise HTTPException(status_code=502, detail="Google did not return an identity token")
+
+        # Verify the signature and decode claims via Google's own tokeninfo
+        # endpoint, rather than adding a JWT-verification dependency.
+        tokeninfo_url = setting_cached("GOOGLE_TOKENINFO_URL", GOOGLE_TOKENINFO_URL)
+        try:
+            info_r = await client.get(tokeninfo_url, params={"id_token": id_token})
+        except httpx.RequestError:
+            log.warning("Google's tokeninfo endpoint is unreachable", exc_info=True)
+            raise HTTPException(status_code=502, detail="Google sign-in is unavailable right now")
+        if info_r.status_code != 200:
+            raise HTTPException(status_code=401, detail="Your Google sign-in expired or could not be verified")
+        try:
+            claims = info_r.json()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=502, detail="Google returned an invalid identity response")
+
+    if not isinstance(claims, dict) or claims.get("aud") != client_id:
+        raise HTTPException(status_code=401, detail="This sign-in was not issued for this app")
+
+    email = claims.get("email")
+    if (not isinstance(email, str) or not email.strip() or "@" not in email
+            or len(email) > 320 or any(ch.isspace() for ch in email.strip())):
+        raise HTTPException(status_code=502, detail="Google did not return a usable email address")
+    verified = claims.get("email_verified")
+    if verified in (False, "false", "False"):
+        raise HTTPException(status_code=401, detail="Google email address is not verified")
+
+    name = claims.get("name") if isinstance(claims.get("name"), str) else None
+    picture = claims.get("picture") if isinstance(claims.get("picture"), str) else None
+    return await _finish_identity(email, name, picture, response)
 
 
 @router.get("/me")

@@ -133,37 +133,46 @@ def main():
             with TestClient(app) as client:
                 check(client.get("/api/health").status_code == 200, "API starts against isolated MongoDB")
 
-                # Simulate the Emergent session exchange without contacting Google or the provider.
+                # Simulate Google's token + tokeninfo endpoints without contacting Google.
                 original_client = auth_routes.httpx.AsyncClient
+                original_creds = auth_routes._google_credentials
+                auth_routes._google_credentials = lambda: ("test-client-id", "test-client-secret")
+                EXCHANGE_BODY = {"code": "offline", "redirect_uri": "https://app.invalid/auth-complete.html"}
                 class FakeResponse:
-                    status_code = 200
-                    payload = {"email": "oauth-test@example.invalid"}
+                    def __init__(self, status_code, payload):
+                        self.status_code = status_code
+                        self.payload = payload
                     def json(self): return self.payload
                 class FakeAsyncClient:
-                    last_request = None
+                    token_status = 200
+                    token_payload = {"id_token": "offline-id-token"}
+                    info_payload = {"email": "oauth-test@example.invalid", "email_verified": True, "aud": "test-client-id"}
+                    last_post = None
+                    last_get = None
                     def __init__(self, **_kwargs): pass
                     async def __aenter__(self): return self
                     async def __aexit__(self, *_args): pass
-                    async def get(self, *args, **kwargs):
-                        FakeAsyncClient.last_request = (args, kwargs)
-                        return FakeResponse()
+                    async def post(self, url, **kwargs):
+                        FakeAsyncClient.last_post = (url, kwargs)
+                        return FakeResponse(FakeAsyncClient.token_status, FakeAsyncClient.token_payload)
+                    async def get(self, url, **kwargs):
+                        FakeAsyncClient.last_get = (url, kwargs)
+                        return FakeResponse(200, FakeAsyncClient.info_payload)
                 auth_routes.httpx.AsyncClient = FakeAsyncClient
                 try:
-                    invalid = client.post("/api/auth/session", json={"session_id": "offline"})
-                    check(invalid.status_code == 502 and mongo[test_db].users.find_one({"email": "oauth-test@example.invalid"}) is None,
-                          "OAuth rejects incomplete provider sessions before creating a user")
-                    FakeResponse.payload = {"email": "oauth-test@example.invalid", "session_token": "offline-oauth-token"}
-                    valid = client.post("/api/auth/session", json={"session_id": "offline"})
+                    valid = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY)
                     oauth_token = valid.json().get("session_token", "")
-                    check(valid.status_code == 200 and oauth_token and oauth_token != "offline-oauth-token" and
+                    check(valid.status_code == 200 and oauth_token and
                           client.get("/api/auth/me", headers=auth(oauth_token)).status_code == 200 and
-                          FakeAsyncClient.last_request[0][0] == auth_routes.EMERGENT_AUTH_URL and
-                          FakeAsyncClient.last_request[1]["headers"]["X-Session-ID"] == "offline",
-                          "mocked OAuth exchange uses the original provider and creates a separate app session")
+                          FakeAsyncClient.last_post[0] == auth_routes.GOOGLE_TOKEN_URL and
+                          FakeAsyncClient.last_post[1]["data"]["code"] == "offline" and
+                          FakeAsyncClient.last_get[0] == auth_routes.GOOGLE_TOKENINFO_URL,
+                          "mocked Google exchange hits Google's own endpoints directly and creates a separate app session")
                     original_user = valid.json()["user"]["id"]
                     mongo[test_db].users.update_one({"id": original_user}, {"$set": {"credits": 37, "roast_battle_unlocked": True}})
-                    FakeResponse.payload = {"email": "oauth-test@example.invalid", "session_token": "provider-token-2", "name": "Updated Name"}
-                    repeat = client.post("/api/auth/session", json={"session_id": "offline-2"})
+                    FakeAsyncClient.info_payload = {"email": "oauth-test@example.invalid", "email_verified": True,
+                                                     "aud": "test-client-id", "name": "Updated Name"}
+                    repeat = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY)
                     second_token = repeat.json().get("session_token", "")
                     profile = client.get("/api/auth/me", headers=auth(second_token)).json()
                     check(repeat.status_code == 200 and second_token != oauth_token and profile["id"] == original_user and
@@ -171,25 +180,32 @@ def main():
                           "repeat Google login preserves the account, credits and purchases while refreshing profile")
                     mongo[test_db].users.update_one({"id": original_user}, {"$set": {"credits": 5}})
 
-                    FakeResponse.payload = {"email": "unverified@example.invalid", "session_token": "provider-token", "email_verified": False}
-                    unverified = client.post("/api/auth/session", json={"session_id": "offline-3"})
+                    FakeAsyncClient.info_payload = {"email": "unverified@example.invalid", "email_verified": False, "aud": "test-client-id"}
+                    unverified = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY)
                     check(unverified.status_code == 401 and mongo[test_db].users.find_one({"email": "unverified@example.invalid"}) is None,
-                          "explicitly unverified provider emails cannot create or link accounts")
-                    FakeResponse.status_code = 503
-                    unavailable = client.post("/api/auth/session", json={"session_id": "offline-4"})
-                    check(unavailable.status_code == 502, "provider outage reports a retryable sign-in failure")
-                    FakeResponse.status_code = 200
-                    check(client.post("/api/auth/session", json={"session_id": ""}).status_code == 422,
-                          "empty provider sessions are rejected before exchange")
+                          "explicitly unverified Google emails cannot create or link accounts")
+                    FakeAsyncClient.info_payload = {"email": "oauth-test@example.invalid", "email_verified": True, "aud": "someone-elses-client-id"}
+                    wrong_aud = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY)
+                    check(wrong_aud.status_code == 401, "a token issued for a different OAuth client is rejected")
+                    FakeAsyncClient.info_payload = {"email": "oauth-test@example.invalid", "email_verified": True, "aud": "test-client-id"}
+                    FakeAsyncClient.token_status = 503
+                    unavailable = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY)
+                    check(unavailable.status_code == 502, "Google outage reports a retryable sign-in failure")
+                    FakeAsyncClient.token_status = 200
+                    check(client.post("/api/auth/google/exchange", json={"code": "", "redirect_uri": "https://app.invalid/auth-complete.html"}).status_code == 422,
+                          "empty authorization codes are rejected before exchange")
+                    auth_routes._google_credentials = lambda: ("", "")
+                    not_configured = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY)
+                    check(not_configured.status_code == 503, "Google sign-in reports a clear error when no OAuth client is configured")
+                    auth_routes._google_credentials = lambda: ("test-client-id", "test-client-secret")
 
-                    FakeResponse.payload = {"email": "oauth-test@example.invalid", "session_token": "provider-token-3"}
-                    third_token = client.post("/api/auth/session", json={"session_id": "offline-5"}).json()["session_token"]
+                    third_token = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY).json()["session_token"]
                     signout = client.post("/api/auth/logout", headers={"Authorization": f"Bearer {second_token}", "Cookie": f"session_token={third_token}"})
                     check(signout.status_code == 200 and client.get("/api/auth/me", headers=auth(second_token)).status_code == 401 and
                           client.get("/api/auth/me", headers=auth(third_token)).status_code == 401 and
                           client.get("/api/auth/me", headers=auth(oauth_token)).status_code == 200,
                           "logout revokes both bearer and cookie sessions without revoking other devices")
-                    fourth_token = client.post("/api/auth/session", json={"session_id": "offline-6"}).json()["session_token"]
+                    fourth_token = client.post("/api/auth/google/exchange", json=EXCHANGE_BODY).json()["session_token"]
                     mongo[test_db].sessions.update_one({"session_token": fourth_token}, {"$set": {"expires_at": "not-a-date"}})
                     invalid_expiry = client.get("/api/auth/me", headers=auth(fourth_token))
                     mongo[test_db].sessions.update_one({"session_token": fourth_token}, {"$set": {"expires_at": "2000-01-01T00:00:00+00:00"}})
@@ -198,6 +214,7 @@ def main():
                           "malformed or expired sessions never authenticate")
                 finally:
                     auth_routes.httpx.AsyncClient = original_client
+                    auth_routes._google_credentials = original_creds
 
                 one, two = post_login(client), post_login(client)
                 user_id, token = one["user"]["id"], one["session_token"]

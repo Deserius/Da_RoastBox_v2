@@ -7,7 +7,7 @@ const AuthContext = createContext(null);
 const AUTH_STATE_KEY = "roastbox_google_auth_state";
 const AUTH_RESULT_KEY = "roastbox_google_auth_result";
 const AUTH_MESSAGE = "roastbox-google-auth-result";
-// The managed provider's OAuth state cookie currently expires after five minutes.
+// How long a sign-in attempt's state token stays valid for.
 const AUTH_MAX_AGE_MS = 5 * 60 * 1000;
 
 function newState() {
@@ -18,6 +18,10 @@ function newState() {
 
 function signInError(error) {
   const status = error?.response?.status;
+  if (status === 503) {
+    return error?.response?.data?.detail
+      || "Google sign-in isn't set up yet. Add a Google OAuth client ID and secret in Settings.";
+  }
   if (status === 401 || status === 400 || status === 422) {
     return "Your Google sign-in expired or could not be verified. Please try again.";
   }
@@ -31,8 +35,22 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [googleConfig, setGoogleConfig] = useState(null);
   const popupAttempt = useRef(null);
   const authRequestVersion = useRef(0);
+
+  // Fetched once up front (not inside login()) so clicking "Continue with
+  // Google" can call window.open synchronously in the same click - any
+  // await beforehand and most browsers silently block the popup.
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/auth/google/config").then(({ data }) => {
+      if (!cancelled) setGoogleConfig(data);
+    }).catch(() => {
+      if (!cancelled) setGoogleConfig({ configured: false });
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchMe = useCallback(async ({ throwOnFailure = false } = {}) => {
     // A slow anonymous /me response must never erase a newer login or sign-out.
@@ -64,10 +82,11 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const finishSignIn = useCallback(async (sessionId) => {
+  const finishSignIn = useCallback(async (code) => {
     let tokenStored = false;
     try {
-      const { data } = await api.post("/auth/session", { session_id: sessionId });
+      const redirectUri = new URL("/auth-complete.html", window.location.origin).toString();
+      const { data } = await api.post("/auth/google/exchange", { code, redirect_uri: redirectUri });
       if (typeof data?.session_token !== "string" || !data.session_token) throw new Error("incomplete_session");
       // The app's bearer token also works when a browser blocks third-party cookies
       // in an embedded preview. It is a locally issued token, not a Google credential.
@@ -119,12 +138,12 @@ export const AuthProvider = ({ children }) => {
           setLoading(false);
           return;
         }
-        if (result.error || !result.sessionId) {
+        if (result.error || !result.code) {
           setLoginError("Google sign-in was canceled or didn't finish. Please try again.");
           setLoading(false);
           return;
         }
-        await finishSignIn(result.sessionId);
+        await finishSignIn(result.code);
         return;
       }
       await fetchMe();
@@ -146,12 +165,12 @@ export const AuthProvider = ({ children }) => {
         setLoginError("This sign-in attempt could not be verified. Please try again.");
         return;
       }
-      if (event.data.error || !event.data.sessionId) {
+      if (event.data.error || !event.data.code) {
         setLoginBusy(false);
         setLoginError("Google sign-in was canceled or didn't finish. Please try again.");
         return;
       }
-      await finishSignIn(event.data.sessionId);
+      await finishSignIn(event.data.code);
       setLoginBusy(false);
     };
     window.addEventListener("message", receive);
@@ -169,6 +188,14 @@ export const AuthProvider = ({ children }) => {
   const login = () => {
     if (popupAttempt.current || loginBusy) return;
     setLoginError("");
+    if (!googleConfig) {
+      setLoginError("Still connecting to the server. Please try again in a moment.");
+      return;
+    }
+    if (!googleConfig.configured || !googleConfig.client_id) {
+      setLoginError("Google sign-in isn't set up yet. Add a Google OAuth client ID and secret in Settings.");
+      return;
+    }
     let state;
     try {
       state = newState();
@@ -180,21 +207,30 @@ export const AuthProvider = ({ children }) => {
     try { embedded = window.self !== window.top; } catch { /* Treat restricted frames as embedded. */ }
     const createdAt = Date.now();
     let redirectMode = !embedded;
+    // The popup/redirect mode travels inside Google's own opaque "state"
+    // value: the redirect_uri sent to Google must exactly match what's
+    // registered in Google Cloud Console, so it cannot carry extra query
+    // params of our own.
     if (redirectMode) {
       try {
         sessionStorage.removeItem(AUTH_RESULT_KEY);
-        sessionStorage.setItem(AUTH_STATE_KEY, JSON.stringify({ state, createdAt }));
+        sessionStorage.setItem(AUTH_STATE_KEY, JSON.stringify({ state: `${state}.redirect`, createdAt }));
       } catch {
         // A popup keeps state in memory if this browser blocks sessionStorage.
         redirectMode = false;
       }
     }
-    const callback = new URL("/auth-complete.html", window.location.origin);
-    callback.searchParams.set("state", state);
-    callback.searchParams.set("mode", redirectMode ? "redirect" : "popup");
-    // The old auth.emergentagent.com wrapper can return a 404 app shell. Start
-    // the same managed OAuth flow at its live provider endpoint directly.
-    const providerUrl = `https://demobackend.emergentagent.com/auth/v1/env/oauth?redirect=${encodeURIComponent(callback.toString())}`;
+    const fullState = `${state}.${redirectMode ? "redirect" : "popup"}`;
+    const redirectUri = new URL("/auth-complete.html", window.location.origin).toString();
+    const authUrl = new URL(googleConfig.auth_url || "https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", googleConfig.client_id);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", "openid email profile");
+    authUrl.searchParams.set("access_type", "online");
+    authUrl.searchParams.set("prompt", "select_account");
+    authUrl.searchParams.set("state", fullState);
+    const providerUrl = authUrl.toString();
 
     if (redirectMode) {
       window.location.assign(providerUrl);
@@ -207,7 +243,7 @@ export const AuthProvider = ({ children }) => {
       setLoginError("Your browser blocked the Google sign-in window. Allow pop-ups, or open this app in a new tab and try again.");
       return;
     }
-    const attempt = { popup, state, createdAt, timer: null, closeTimer: null };
+    const attempt = { popup, state: fullState, createdAt, timer: null, closeTimer: null };
     popupAttempt.current = attempt;
     setLoginBusy(true);
     attempt.timer = window.setInterval(() => {

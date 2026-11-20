@@ -33,7 +33,7 @@ async def dispatch(request: Request):
         raise HTTPException(status_code=400, detail="Invalid API path")
     target = urlsplit(raw_path)
     decoded = unquote(target.path)
-    blocked = ("/api/session/", "/api/auth/session", "/api/auth/dev-login", "/api/auth/preview-login", "/api/payments/webhook")
+    blocked = ("/api/session/", "/api/auth/google/exchange", "/api/auth/dev-login", "/api/auth/preview-login", "/api/payments/webhook")
     if (target.scheme or target.netloc or target.fragment or not target.path.startswith("/api/") or
             decoded.startswith(blocked) or "\\" in decoded or any(p in (".", "..") for p in decoded.split("/"))):
         raise HTTPException(status_code=400, detail="Invalid API path")

@@ -1,13 +1,17 @@
 (function () {
   var current = new URL(window.location.href);
-  var fragment = new URLSearchParams(current.hash.replace(/^#\??/, ""));
+  var state = current.searchParams.get("state") || "";
   var result = {
     type: "roastbox-google-auth-result",
-    state: current.searchParams.get("state") || "",
-    sessionId: fragment.get("session_id") || "",
-    error: fragment.get("error") || current.searchParams.get("error") || ""
+    state: state,
+    code: current.searchParams.get("code") || "",
+    error: current.searchParams.get("error") || ""
   };
-  var mode = current.searchParams.get("mode");
+  // Google redirects straight back here with ?code&state (no broker in
+  // between), so the popup/redirect mode travels as a suffix on our own
+  // opaque state value instead of a separate query param - the redirect_uri
+  // registered in Google Cloud Console must stay an exact, stable string.
+  var mode = state.slice(state.lastIndexOf(".") + 1);
   // Do this before opening the main app or running any third-party scripts.
   window.history.replaceState(null, "", current.pathname);
   var status = document.getElementById("status");

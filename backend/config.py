@@ -147,16 +147,22 @@ PREVIEW_HOSTED_DAILY_VOICE_LIMIT = int(os.environ.get("PREVIEW_HOSTED_DAILY_VOIC
 # Preview accounts cannot buy credits, so this removes the credit requirement
 # (and the debit) for them. Off by default for any deployment that bills users.
 PREVIEW_UNLIMITED_CREDITS = _flag("PREVIEW_UNLIMITED_CREDITS")
-# Google sign-in. The original build delegates OAuth to a managed provider URL
-# (see routes/auth.py). Supplying a pair of Google OAuth client credentials lets
-# an operator point the app at their own consent screen instead.
+# Google sign-in: a direct, standard OAuth 2.0 authorization-code flow against
+# Google's own endpoints, using the operator's own Google Cloud OAuth client
+# (Settings -> Connect your services). There is no third-party broker in this
+# flow, so the Google consent screen shows the operator's own app name, never
+# a vendor's - set these two and add {origin}/auth-complete.html as an
+# authorised redirect URI in Google Cloud Console to turn Google sign-in on.
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
-# Managed provider endpoints (default). Override to use a self-hosted broker.
+# Google's own endpoints (default). Only override for a compliant self-hosted
+# OIDC provider; these are not Da RoastBox endpoints.
 GOOGLE_AUTH_URL = (os.environ.get("GOOGLE_AUTH_URL")
-                   or "https://demobackend.emergentagent.com/auth/v1/env/oauth").strip()
-GOOGLE_SESSION_URL = (os.environ.get("GOOGLE_SESSION_URL")
-                      or "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data").strip()
+                   or "https://accounts.google.com/o/oauth2/v2/auth").strip()
+GOOGLE_TOKEN_URL = (os.environ.get("GOOGLE_TOKEN_URL")
+                    or "https://oauth2.googleapis.com/token").strip()
+GOOGLE_TOKENINFO_URL = (os.environ.get("GOOGLE_TOKENINFO_URL")
+                        or "https://oauth2.googleapis.com/tokeninfo").strip()
 
 # Owner settings console: lets an operator enter provider credentials from the
 # running app instead of hand-editing the environment. Intended for a disposable

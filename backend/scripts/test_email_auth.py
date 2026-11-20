@@ -99,25 +99,34 @@ def main():
                   linked_login.json()['user']['credits'] == 47 and db.users.count_documents({'id': existing.id}) == 1,
                   'mailbox verification links to the existing Google account without losing purchases')
 
-            # Managed Google exchange is mocked: repeat login must converge on
-            # the same mixed-case account and retain all its entitlements.
+            # Google's token + tokeninfo endpoints are mocked: repeat login must
+            # converge on the same mixed-case account and retain all its entitlements.
             original = google.httpx.AsyncClient
+            original_creds = google._google_credentials
+            google._google_credentials = lambda: ('test-client-id', 'test-client-secret')
             class FakeResponse:
-                status_code = 200
-                def json(self): return {'email': 'MIXEDCASE@example.com', 'name': 'Google Updated', 'session_token': 'provider-only'}
+                def __init__(self, payload):
+                    self.status_code = 200
+                    self.payload = payload
+                def json(self): return self.payload
             class FakeClient:
                 def __init__(self, **kw): pass
                 async def __aenter__(self): return self
                 async def __aexit__(self, *args): pass
-                async def get(self, *args, **kwargs): return FakeResponse()
+                async def post(self, *args, **kwargs): return FakeResponse({'id_token': 'offline-id-token'})
+                async def get(self, *args, **kwargs):
+                    return FakeResponse({'email': 'MIXEDCASE@example.com', 'name': 'Google Updated',
+                                         'email_verified': True, 'aud': 'test-client-id'})
             google.httpx.AsyncClient = FakeClient
             try:
-                result = client.post('/api/auth/session', json={'session_id': 'offline-only'})
+                result = client.post('/api/auth/google/exchange',
+                                      json={'code': 'offline-only', 'redirect_uri': 'https://app.invalid/auth-complete.html'})
                 check(result.status_code == 200 and result.json()['user']['id'] == existing.id and result.json()['user']['credits'] == 47 and
                       db.users.find_one({'id': existing.id})['roast_battle_unlocked'],
                       'mocked Google sign-in converges case-insensitively on the same account')
             finally:
                 google.httpx.AsyncClient = original
+                google._google_credentials = original_creds
 
             client.post('/api/auth/email/forgot', json={'email': address})
             reset = link_token()

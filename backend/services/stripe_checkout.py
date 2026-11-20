@@ -45,6 +45,16 @@ class CheckoutSessionResponse:
 
 
 @dataclass
+class CheckoutStatus:
+    """What the caller needs to know about a Checkout Session right now."""
+
+    payment_status: str
+    amount_total: Optional[float] = None
+    currency: Optional[str] = None
+    raw: Any = None
+
+
+@dataclass
 class WebhookEvent:
     """Normalised view of the events this app cares about."""
 
@@ -102,6 +112,29 @@ class StripeCheckout:
 
         session = await asyncio.to_thread(_create)
         return CheckoutSessionResponse(url=session.url, session_id=session.id, raw=session)
+
+    # -- polling ------------------------------------------------------------
+    async def get_checkout_status(self, session_id: str) -> CheckoutStatus:
+        """Ask Stripe directly for a session's status.
+
+        Used both by the success-page poll (the user is watching) and by the
+        background sweep that catches anything paid while nobody was looking
+        (no public webhook endpoint in local/dev use). Stripe's own
+        ``payment_status`` on the session is "paid"/"unpaid"/"no_payment_required";
+        callers compare case-insensitively against "paid".
+        """
+        def _retrieve():
+            return stripe.checkout.Session.retrieve(session_id, api_key=self.api_key)
+
+        session = await asyncio.to_thread(_retrieve)
+        get = session.get if hasattr(session, "get") else lambda k, d=None: getattr(session, k, d)
+        amount = get("amount_total")
+        return CheckoutStatus(
+            payment_status=str(get("payment_status") or "unknown"),
+            amount_total=(float(amount) / 100.0) if isinstance(amount, (int, float)) else None,
+            currency=get("currency"),
+            raw=session,
+        )
 
     # -- webhooks ---------------------------------------------------------
     async def handle_webhook(self, payload: bytes, signature: str) -> WebhookEvent:
@@ -169,5 +202,6 @@ __all__ = [
     "StripeCheckout",
     "CheckoutSessionRequest",
     "CheckoutSessionResponse",
+    "CheckoutStatus",
     "WebhookEvent",
 ]
