@@ -34,9 +34,14 @@ Both give the same project. The zip has no `.git` history and no `node_modules`.
 | Requirement | Version | Why |
 |---|---|---|
 | Python | 3.11 – 3.13 | Backend (FastAPI) |
-| Node.js | 18 or newer | Frontend (React) |
+| Node.js | 18+, ideally 20 or 22 LTS | Frontend (React) |
+| yarn | 1.22.x | Frontend install — npm produces a tree that will not build |
 | MongoDB | 6 or newer | Database — **required** |
-| ffmpeg | any recent | Highlight-reel video export only |
+| ffmpeg | any recent | Highlight-reel export only (usually bundled) |
+
+**On Windows 10?** See [`docs/WINDOWS_10.md`](docs/WINDOWS_10.md) — it covers the
+one real caveat (MongoDB does not officially support Windows 10) plus long paths,
+antivirus locks and the other Windows-specific traps.
 
 Get MongoDB either with Docker:
 
@@ -64,7 +69,7 @@ cd Da_RoastBox_v2
 setup.bat
 ```
 
-`setup.sh` / `setup.bat` do five things:
+`setup.sh` / `setup.bat` do these things:
 
 1. Create a `.venv` and install backend requirements.
 2. Remove two `@emergentbase/*` dev packages that point at `assets.emergent.sh`,
@@ -73,9 +78,12 @@ setup.bat
    provide the Emergent dev overlay and visual editor — `craco.config.js`
    already loads them defensively and logs "overlay disabled" when absent, so
    nothing else changes.)*
-3. Install frontend dependencies with `npm install --legacy-peer-deps`.
-4. Generate `backend/.env` with a random `JWT_SECRET` and working local defaults.
-5. Print the run commands.
+3. If your network cannot reach `registry.yarnpkg.com`, rewrite the lockfile
+   hosts to `registry.npmjs.org` for the duration of the install.
+4. Install frontend dependencies with `yarn install` (yarn is required — see
+   "Why yarn, not npm" below).
+5. Generate `backend/.env` with a random `JWT_SECRET` and working local defaults.
+6. Print the run commands, and warn if no database is listening on port 27017.
 
 If you would rather do it by hand:
 
@@ -84,12 +92,29 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r backend/requirements.txt
 
 cd frontend
-# delete the two "@emergentbase/..." lines from the devDependencies block first
-npm install --legacy-peer-deps
+python ../scripts/prepare_package_json.py package.json   # drops the 2 dead devDeps
+cp yarn.lock yarn.lock.bak
+python ../scripts/fix_lockfile_registry.py yarn.lock      # optional: registry swap
+yarn install --ignore-engines
+mv -f yarn.lock.bak yarn.lock
+# restore package.json from your backup when done
 cd ..
 
 cp backend/.env.example backend/.env
 # then edit backend/.env: set MONGO_URL, DB_NAME, JWT_SECRET
+```
+
+### Why yarn, not npm
+
+`frontend/package.json` pins 46 transitive versions through yarn's `resolutions`
+field, and `yarn.lock` records 1457 exact tarball URLs. npm ignores `resolutions`
+and hoists differently, producing a tree that **will not build**: ajv 6 lands
+where `ajv-keywords@5` requires ajv 8, and `craco build` dies with
+`MODULE_NOT_FOUND` inside `terser-webpack-plugin`. This is not an app bug; it is
+npm resolving a different graph. Install yarn if you do not have it:
+
+```bash
+npm install -g yarn
 ```
 
 ---
@@ -203,6 +228,8 @@ preview logins, dry-run mode and the runtime settings console in production.
 | Symptom | Cause and fix |
 |---|---|
 | `ENOENT` / `getaddrinfo assets.emergent.sh` during install | `install.sh`/`install.bat` ran instead of `setup.sh`/`setup.bat`. Use the setup scripts, or delete the two `@emergentbase/*` devDependencies lines from `frontend/package.json` first. |
+| `yarn install` fails: "Client network socket disconnected before secure TLS connection was established" | Your network cannot reach `registry.yarnpkg.com`. The setup scripts rewrite the lockfile to `registry.npmjs.org` automatically; if you install by hand, run `python scripts/fix_lockfile_registry.py frontend/yarn.lock`. |
+| `MODULE_NOT_FOUND` in `terser-webpack-plugin` / `ajv-keywords` | The frontend was installed with **npm**. npm ignores the repo's yarn-only `resolutions` field and resolves a tree that will not build. Delete `frontend/node_modules` and reinstall with yarn. |
 | `KeyError: 'MONGO_URL'` on startup | `backend/.env` is missing or lacks `MONGO_URL`. Copy `backend/.env.example` and set it. |
 | Backend starts but pages 404 | Frontend dev server not running, or `API_PROXY_TARGET` is not `http://127.0.0.1:8001`. |
 | `pymongo.errors.ServerSelectionTimeoutError` | MongoDB is not running. Start the container or point `MONGO_URL` at Atlas. |

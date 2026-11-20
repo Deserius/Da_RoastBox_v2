@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Da RoastBox — one-command local setup (macOS / Linux)
+# Da RoastBox — one-command local setup (macOS / Linux). Windows uses setup.bat.
 #
-# The bundled `install.sh` runs `yarn install --frozen-lockfile`, which fails:
-# the lockfile pins two @emergentbase dev packages hosted on assets.emergent.sh,
-# a host that no longer resolves. Those packages only provide the Emergent dev
-# overlay and visual editor, and craco.config.js already loads them defensively
-# (it logs "overlay disabled" and carries on). So this script drops just those
-# two devDependencies before installing, then puts package.json back.
+# Why this script exists
+#   The bundled `install.sh` runs `yarn install --frozen-lockfile`, which fails:
+#   frontend/package.json pins two @emergentbase dev packages to tarballs on
+#   assets.emergent.sh, a host that no longer resolves. Those packages only
+#   provide the Emergent dev overlay and visual editor, and craco.config.js
+#   already loads them defensively. So this drops just those two
+#   devDependencies, installs with yarn, then puts package.json back.
+#
+#   yarn is required rather than preferred: the repo pins 46 transitive
+#   versions via the yarn-only `resolutions` field, and npm's different hoisting
+#   produces a tree that will not build (ajv 6 where ajv-keywords needs ajv 8).
 #
 # Usage:  ./setup.sh          install backend + frontend
 #         ./setup.sh --run    install, then start both servers
@@ -19,135 +24,153 @@ RUN_AFTER=0
 [ "${1:-}" = "--run" ] && RUN_AFTER=1
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+warn() { printf '\n\033[1;33mWARNING:\033[0m %s\n' "$*"; }
 fail() { printf '\n\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# If anything aborts after we strip the overlay devDeps, put package.json back.
+# Without this a failed install strands the user with a modified package.json.
+PKG_BAK="frontend/package.json.bak"
+restore_pkg() {
+  if [ -f "$PKG_BAK" ]; then
+    mv -f "$PKG_BAK" frontend/package.json 2>/dev/null || true
+  fi
+  if [ -f "frontend/yarn.lock.bak" ]; then
+    mv -f "frontend/yarn.lock.bak" frontend/yarn.lock 2>/dev/null || true
+  fi
+}
+trap restore_pkg EXIT INT TERM
 
 # --- Python ---------------------------------------------------------------
 PY=""
 for c in python3.13 python3.12 python3.11 python3; do
-  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; assert sys.version_info[:2] in ((3,11),(3,12),(3,13))' 2>/dev/null; then
-    PY="$c"; break
+  if command -v "$c" >/dev/null 2>&1 &&
+    "$c" -c 'import sys; assert (3,11) <= sys.version_info[:2] <= (3,13)' 2>/dev/null; then
+    PY="$c"
+    break
   fi
 done
-[ -n "$PY" ] || fail "Python 3.11-3.13 is required. Install it from https://www.python.org/downloads/ and rerun."
+[ -n "$PY" ] || fail "Python 3.11, 3.12 or 3.13 is required (3.10 and older lack wheels for several pinned packages). Install one from https://www.python.org/downloads/ and rerun."
 
 say "Using $($PY --version)"
 [ -d .venv ] || "$PY" -m venv .venv
 # shellcheck disable=SC1091
 . .venv/bin/activate
-python -m pip install --quiet --upgrade pip
+python -m pip install --quiet --upgrade pip || fail "Could not upgrade pip. Check your internet connection or proxy."
 
 say "Installing backend dependencies"
-if [ -f backend/requirements.txt ]; then
-  pip install --quiet -r backend/requirements.txt || fail "Backend dependency install failed. Scroll up for the missing package."
-else
-  fail "backend/requirements.txt is missing — the archive is incomplete."
-fi
+[ -f backend/requirements.txt ] || fail "backend/requirements.txt is missing — the archive is incomplete."
+pip install --quiet -r backend/requirements.txt ||
+  fail "Backend dependency install failed. Scroll up for the failing package. Common causes: no internet, a proxy, or a missing build tool."
 
 # --- Node ----------------------------------------------------------------
-command -v node >/dev/null 2>&1 || fail "Node.js 18+ is required. Install it from https://nodejs.org and rerun."
-say "Using Node $(node --version)"
+command -v node >/dev/null 2>&1 ||
+  fail "Node.js 18+ is required. Install Node 20 or 22 LTS from https://nodejs.org and rerun."
 
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+say "Using Node $(node --version)"
+[ "$NODE_MAJOR" -ge 18 ] ||
+  fail "Node $(node --version) is too old. Install Node 20 or 22 LTS from https://nodejs.org and rerun."
+[ "$NODE_MAJOR" -ge 25 ] &&
+  warn "Node $(node --version) is newer than this project was built against. If the frontend misbehaves, install Node 20 or 22 LTS."
+
+command -v yarn >/dev/null 2>&1 ||
+  fail "yarn is required to install the frontend (the repo's pinned dependency tree depends on yarn's 'resolutions' field; npm produces a tree that will not build).
+       Install it with one of:
+           npm install -g yarn
+           corepack enable && corepack prepare yarn@1.22.22 --activate"
+
+# --- Frontend ------------------------------------------------------------
 cd frontend
 cp -f package.json package.json.bak
 
 say "Removing the two unreachable @emergentbase dev packages"
-python - <<'PY'
-import json, pathlib
-p = pathlib.Path("package.json")
-d = json.loads(p.read_text())
-dev = d.get("devDependencies", {})
-removed = [k for k in list(dev) if k.startswith("@emergentbase/")]
-for k in removed:
-    del dev[k]
-p.write_text(json.dumps(d, indent=2) + "\n")
-print("  removed:", ", ".join(removed) or "nothing")
-PY
+python ../scripts/prepare_package_json.py package.json ||
+  fail "Could not rewrite frontend/package.json."
+
+# Some networks cannot reach registry.yarnpkg.com, and yarn 1 ignores
+# --registry for URLs the lockfile already resolved. Swapping the host to
+# registry.npmjs.org is safe: identical tarballs, identical sha1 fragments.
+LOCK_BAK="yarn.lock.bak"
+cp -f yarn.lock "$LOCK_BAK"
+python ../scripts/fix_lockfile_registry.py yarn.lock
 
 say "Installing frontend dependencies (this takes a few minutes)"
-if command -v yarn >/dev/null 2>&1; then
-  yarn install --ignore-engines --non-interactive || fail "yarn install failed."
-else
-  npm install --legacy-peer-deps || fail "npm install failed."
+if ! yarn install --ignore-engines --non-interactive; then
+  rest=0
+  if [ -f "$LOCK_BAK" ]; then
+    mv -f "$LOCK_BAK" yarn.lock
+    rest=1
+    say "Retrying against registry.yarnpkg.com"
+    yarn install --ignore-engines --non-interactive || rest=0
+  fi
+  [ "$rest" = "1" ] || fail "yarn install failed. Scroll up for the real error. Common causes: no internet, a proxy, or antivirus locking node_modules."
 fi
+# Restore the committed lockfile: the rewritten copy was only needed for the
+# install itself, and the repo should be left exactly as it shipped.
+if [ -f "$LOCK_BAK" ]; then mv -f "$LOCK_BAK" yarn.lock; fi
 
 mv -f package.json.bak package.json
+cd ..
 
 # --- .env ----------------------------------------------------------------
-cd ..
-if [ ! -f backend/.env ]; then
-  say "Creating backend/.env from the example"
-  cp backend/.env.example backend/.env
-  # A runnable local secret set. Change these before exposing anything publicly.
-  python - <<'PY'
-import pathlib, secrets
-f = pathlib.Path("backend/.env")
-lines = []
-for line in f.read_text().splitlines():
-    s = line.strip()
-    if s.startswith("MONGO_URL=") or s.startswith("DB_NAME=") or s.startswith("JWT_SECRET="):
-        continue  # rewritten below
-    lines.append(line)
-lines += [
-    "",
-    "# --- local development (generated by setup.sh) ---",
-    "MONGO_URL=mongodb://localhost:27017",
-    "DB_NAME=roastbox",
-    f"JWT_SECRET={secrets.token_hex(32)}",
-    "APP_ENV=development",
-    "STORAGE_BACKEND=local",
-    "",
-    "# Local preview sign-in with unlimited credits.",
-    "ENABLE_PREVIEW_LOGIN=true",
-    "PREVIEW_UNLIMITED_CREDITS=true",
-    "ALLOW_PREVIEW_HOSTED_AI=true",
-    "PREVIEW_HOSTED_DAILY_SHOW_LIMIT=-1",
-    "PREVIEW_HOSTED_DAILY_VOICE_LIMIT=-1",
-    "ALLOW_DEV_LOGIN=true",
-    "",
-    "# Settings console (API keys) — change this passphrase.",
-    "ALLOW_RUNTIME_SETTINGS=true",
-    "RUNTIME_SETTINGS_PASSPHRASE=roastbox",
-    "",
-    "# Set to false once you add a real OpenRouter/OpenAI key.",
-    "ROASTBOX_DRY_RUN=true",
-    "",
-]
-f.write_text("\n".join(lines))
-print("  wrote backend/.env (gitignored)")
-PY
-else
-  say "backend/.env already exists — leaving it alone"
+say "Preparing backend/.env"
+python scripts/make_env.py || fail "Could not create backend/.env."
+
+# --- Database ------------------------------------------------------------
+say "Checking for a database on port 27017"
+DB_UP=0
+if command -v nc >/dev/null 2>&1 && nc -z 127.0.0.1 27017 2>/dev/null; then
+  DB_UP=1
+elif (exec 3<>/dev/tcp/127.0.0.1/27017) 2>/dev/null; then
+  DB_UP=1
 fi
 
-say "Setup complete"
+if [ "$DB_UP" = "1" ]; then
+  say "Setup complete — a database answered on port 27017"
+else
+  say "Setup complete — but nothing is answering on port 27017"
+  cat <<'MSG'
+
+The app cannot start until you provide a MongoDB.
+
+  Local, with Docker:
+      docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
+
+  Local, without Docker (macOS):
+      brew tap mongodb/brew && brew install mongodb-community@7.0
+      brew services start mongodb-community@7.0
+
+  Free hosted cluster (easiest, no install):
+      Sign up at https://www.mongodb.com/cloud/atlas/register,
+      create an M0 cluster, add a database user, allow your IP, then copy the
+      "mongodb+srv://..." connection string into backend/.env as MONGO_URL.
+
+MSG
+fi
+
+say "How to start the app"
 cat <<'MSG'
-
-MongoDB is required. Either run one locally:
-    docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
-
-or use a free MongoDB Atlas cluster and put its URI in backend/.env as MONGO_URL.
-
-Start the app (two terminals):
 
   Terminal 1 — backend
       cd backend && ../.venv/bin/uvicorn server:app --reload --port 8001
 
   Terminal 2 — frontend
-      cd frontend && npm start
+      cd frontend && yarn start
 
-Then open http://localhost:3000 and choose "Browse as guest".
-Settings -> "Connect your services" (passphrase: roastbox) is where you paste
-your OpenRouter / OpenAI / ElevenLabs / Stripe / Google keys.
+  Then open http://localhost:3000 and choose "Browse as guest".
 
-ROASTBOX_DRY_RUN=true in backend/.env makes roasts generate with no internet
-access. Set it to false after you add a real provider key so live AI is used.
+  Settings -> "Connect your services" (passphrase: roastbox) is where you paste
+  your OpenRouter / OpenAI / ElevenLabs / Stripe / Google keys.
+
+  ROASTBOX_DRY_RUN=true in backend/.env lets roasts generate with no internet
+  access. Set it to false after adding a real provider key so live AI is used.
 
 MSG
 
 if [ "$RUN_AFTER" = "1" ]; then
   say "Starting both servers (Ctrl-C stops them)"
-  ( cd backend && ../.venv/bin/uvicorn server:app --port 8001 ) &
+  (cd backend && ../.venv/bin/uvicorn server:app --port 8001) &
   BACKEND_PID=$!
-  trap 'kill $BACKEND_PID 2>/dev/null || true' EXIT
-  ( cd frontend && npm start )
+  trap 'kill $BACKEND_PID 2>/dev/null || true; restore_pkg' EXIT INT TERM
+  (cd frontend && yarn start)
 fi

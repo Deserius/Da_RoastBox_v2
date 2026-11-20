@@ -1,101 +1,310 @@
 @echo off
 REM ==========================================================================
-REM  Da RoastBox - one-command local setup (Windows)
+REM  Da RoastBox - one-command local setup for Windows 10 / 11 (x64)
 REM
-REM  install.bat runs "yarn install --frozen-lockfile", which fails because the
-REM  lockfile pins two @emergentbase dev packages on assets.emergent.sh, a host
-REM  that no longer resolves. Those only provide the Emergent dev overlay and
-REM  visual editor, and craco.config.js loads them defensively. This script
-REM  removes just those two devDependencies, installs, then restores the file.
+REM  Why this script exists
+REM    install.bat runs "yarn install --frozen-lockfile", which always fails:
+REM    frontend/package.json pins two @emergentbase dev packages to tarballs on
+REM    assets.emergent.sh, a host that no longer resolves. Those packages only
+REM    provide the Emergent dev overlay and visual editor, and craco.config.js
+REM    already loads them defensively. So this removes just those two
+REM    devDependencies, installs, then puts package.json back unchanged.
 REM
-REM  Usage:  setup.bat        install
+REM  yarn is required, not just preferred. The repo pins 46 transitive
+REM  versions through the yarn-only "resolutions" field, and npm hoists
+REM  differently: ajv 6 lands where ajv-keywords needs ajv 8 and the build dies
+REM  with MODULE_NOT_FOUND. yarn is the tested installer here.
+REM
+REM  Usage:  setup.bat        install only
 REM          setup.bat run    install, then start both servers
 REM ==========================================================================
 setlocal enabledelayedexpansion
+title Da RoastBox - Setup
 cd /d "%~dp0"
+if errorlevel 1 (
+  echo.
+  echo Cannot open the project folder.
+  echo Extract the whole ZIP to a local folder such as C:\RoastBox,
+  echo then run setup.bat again from inside that folder.
+  echo.
+  pause
+  exit /b 1
+)
 
 echo.
+echo ============================================================
+echo   Da RoastBox - local setup
+echo ============================================================
+echo.
+
+REM ---------------------------------------------------------------- Python
 echo ==^> Checking Python
+set "PYEXE="
 py -3 --version >nul 2>&1
-if errorlevel 1 (
+if not errorlevel 1 set "PYEXE=py -3"
+if not defined PYEXE (
   python --version >nul 2>&1
-  if errorlevel 1 (
-    echo ERROR: Python 3.11-3.13 is required. Install it from https://www.python.org/downloads/
-    echo        and tick "Add python.exe to PATH" during setup.
-    pause & exit /b 1
-  )
-  set PYEXE=python
-) else (
-  set PYEXE=py -3
+  if not errorlevel 1 set "PYEXE=python"
 )
+if not defined PYEXE goto nopython
+for /f "delims=" %%v in ('%PYEXE% --version 2^>^&1') do echo    %%v
+%PYEXE% -c "import sys;sys.exit(0 if (3,11)<=sys.version_info[:2]<=(3,13) else 1)"
+if errorlevel 1 goto badpython
 
-if not exist ".venv" (
-  echo ==^> Creating virtual environment
-  %PYEXE% -m venv .venv || (echo ERROR: could not create .venv & pause & exit /b 1)
+REM ---------------------------------------------------------------- venv
+if not exist ".venv\Scripts\python.exe" (
+  echo ==^> Creating virtual environment ^(.venv^)
+  %PYEXE% -m venv .venv
+  if errorlevel 1 goto novenv
 )
-call .venv\Scripts\activate.bat
+call ".venv\Scripts\activate.bat"
 python -m pip install --quiet --upgrade pip
+if errorlevel 1 goto nopip
 
-echo ==^> Installing backend dependencies
-python -m pip install --quiet -r backend\requirements.txt || (
-  echo ERROR: backend dependency install failed. Scroll up for the missing package.
-  pause & exit /b 1
-)
+echo ==^> Installing backend dependencies ^(a few minutes^)
+python -m pip install --quiet -r backend\requirements.txt
+if errorlevel 1 goto nodeps
 
+REM ---------------------------------------------------------------- Node
 echo ==^> Checking Node.js
-where node >nul 2>&1 || (
-  echo ERROR: Node.js 18+ is required. Install it from https://nodejs.org
-  pause & exit /b 1
+where node >nul 2>&1
+if errorlevel 1 goto nonode
+for /f "delims=" %%v in ('node --version') do set "NODEV=%%v"
+echo    Node !NODEV!
+set "NODEMAJOR=!NODEV:v=!"
+for /f "tokens=1 delims=." %%a in ("!NODEMAJOR!") do set "NODEMAJOR=%%a"
+if !NODEMAJOR! LSS 18 goto oldnode
+if !NODEMAJOR! GEQ 25 (
+  echo.
+  echo    WARNING: Node !NODEV! is newer than this project was built against.
+  echo             If "yarn start" fails, install Node 20 or 22 LTS.
+  echo.
 )
-for /f "delims=" %%v in ('node --version') do echo    Node %%v
 
+echo ==^> Checking yarn
+where yarn >nul 2>&1
+if errorlevel 1 (
+  echo    yarn not found. Installing it globally with npm...
+  call npm install -g yarn
+  if errorlevel 1 goto noyarn
+  where yarn >nul 2>&1
+  if errorlevel 1 goto noyarn
+)
+for /f "delims=" %%v in ('yarn --version') do echo    yarn %%v
+
+REM ---------------------------------------------------------------- frontend
 echo ==^> Removing the two unreachable @emergentbase dev packages
 cd frontend
+if exist package.json.bak del /q package.json.bak
+if exist yarn.lock.bak del /q yarn.lock.bak
 copy /y package.json package.json.bak >nul
-%PYEXE% -c "import json,pathlib;p=pathlib.Path('package.json');d=json.loads(p.read_text());dev=d.get('devDependencies',{});[dev.pop(k) for k in [k for k in dev if k.startswith('@emergentbase/')]];p.write_text(json.dumps(d,indent=2)+chr(10));print('   ok')"
+%PYEXE% ..\scripts\prepare_package_json.py package.json
+if errorlevel 1 goto badpkg
 
-echo ==^> Installing frontend dependencies ^(a few minutes^)
-call npm install --legacy-peer-deps
-if errorlevel 1 (
-  move /y package.json.bak package.json >nul
-  echo ERROR: npm install failed.
-  pause & exit /b 1
+REM Some networks cannot reach registry.yarnpkg.com, and yarn 1 ignores
+REM --registry for URLs the lockfile already resolved. npmjs.org serves the
+REM same tarballs with the same sha1 fragments, so a host swap is safe.
+copy /y yarn.lock yarn.lock.bak >nul
+%PYEXE% ..\scripts\fix_lockfile_registry.py yarn.lock
+
+echo ==^> Installing frontend dependencies ^(this is the slow part^)
+call yarn install --ignore-engines --non-interactive
+set "YARN_RC=%errorlevel%"
+if not "%YARN_RC%"=="0" goto retryyarn
+goto yarnok
+
+:retryyarn
+echo.
+echo    First attempt failed. Restoring the original lockfile and retrying.
+if exist yarn.lock.bak (
+  move /y yarn.lock.bak yarn.lock >nul
+  call yarn install --ignore-engines --non-interactive
+  if errorlevel 1 goto yarnfailed
+) else (
+  goto yarnfailed
 )
+
+:yarnok
+REM Restore both files so the project is left exactly as it shipped.
+if exist yarn.lock.bak move /y yarn.lock.bak yarn.lock >nul
 move /y package.json.bak package.json >nul
 cd ..
 
-if not exist "backend\.env" (
-  echo ==^> Creating backend\.env
-  copy backend\.env.example backend\.env >nul
-  %PYEXE% -c "import pathlib,secrets;f=pathlib.Path('backend/.env');L=[l for l in f.read_text().splitlines() if not l.strip().startswith(('MONGO_URL=','DB_NAME=','JWT_SECRET='))];L+=['','# --- local development (generated by setup.bat) ---','MONGO_URL=mongodb://localhost:27017','DB_NAME=roastbox','JWT_SECRET='+secrets.token_hex(32),'APP_ENV=development','STORAGE_BACKEND=local','','ENABLE_PREVIEW_LOGIN=true','PREVIEW_UNLIMITED_CREDITS=true','ALLOW_PREVIEW_HOSTED_AI=true','PREVIEW_HOSTED_DAILY_SHOW_LIMIT=-1','PREVIEW_HOSTED_DAILY_VOICE_LIMIT=-1','ALLOW_DEV_LOGIN=true','','ALLOW_RUNTIME_SETTINGS=true','RUNTIME_SETTINGS_PASSPHRASE=roastbox','','ROASTBOX_DRY_RUN=true',''];f.write_text(chr(10).join(L));print('   wrote backend/.env (gitignored)')"
-) else (
-  echo ==^> backend\.env already exists - leaving it alone
-)
+REM ---------------------------------------------------------------- .env
+echo ==^> Preparing backend\.env
+%PYEXE% scripts\make_env.py
+if errorlevel 1 goto noenv
+
+REM ---------------------------------------------------------------- MongoDB
+echo ==^> Checking for a database on port 27017
+set "MONGO_UP="
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "try{$c=New-Object Net.Sockets.TcpClient;$c.Connect('127.0.0.1',27017);if($c.Connected){$c.Close();exit 0}}catch{};exit 1" >nul 2>&1
+if not errorlevel 1 set "MONGO_UP=1"
 
 echo.
 echo ============================================================
-echo  Setup complete.
+if defined MONGO_UP (
+  echo   Setup complete. A database answered on port 27017.
+) else (
+  echo   Setup complete - but NOTHING is answering on port 27017.
+  echo   The app cannot start until you provide a MongoDB.
+  echo.
+  echo   EASIEST - MongoDB Atlas. Works on any Windows 10 edition,
+  echo   no virtualization, no admin rights, no local install:
+  echo     1. Sign up free: https://www.mongodb.com/cloud/atlas/register
+  echo     2. Create a free M0 cluster.
+  echo     3. Database Access - add a user and a password.
+  echo     4. Network Access - Add IP Address - Allow Access From Anywhere.
+  echo     5. Connect - Drivers - copy the "mongodb+srv://..." string.
+  echo     6. Open backend\.env and replace the MONGO_URL line with it.
+  echo.
+  echo   LOCAL MongoDB on Windows 10:
+  echo     MongoDB 7.x for Windows x64 installs and runs on Windows 10.
+  echo     MongoDB only officially supports Windows 11 / Server 2022, so
+  echo     this is unsupported-but-working. Take the 7.0.x Windows x64 MSI
+  echo     from https://www.mongodb.com/try/download/community and install it
+  echo     as a service. Do NOT install the 8.x or 9.x Windows 11 build here.
+  echo.
+  echo   DOCKER - needs Docker Desktop with WSL2 or Hyper-V ^(Pro/Enterprise^):
+  echo     docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
+  echo.
+)
+echo ============================================================
 echo.
-echo  MongoDB is required. Run one locally, e.g.:
-echo      docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
-echo  or use a free MongoDB Atlas cluster and set MONGO_URL in
-echo  backend\.env.
+echo  Start the app in TWO Command Prompt windows:
 echo.
-echo  Start the app (two Command Prompt windows):
-echo    Window 1:  cd backend  ^&^& ..\.venv\Scripts\uvicorn server:app --reload --port 8001
-echo    Window 2:  cd frontend ^&^& npm start
+echo    Window 1:  cd /d "%~dp0backend"
+echo               ..\.venv\Scripts\uvicorn server:app --port 8001
+echo.
+echo    Window 2:  cd /d "%~dp0frontend"
+echo               yarn start
 echo.
 echo  Then open http://localhost:3000 and click "Browse as guest".
-echo  Settings -^> "Connect your services" (passphrase: roastbox)
-echo  is where you paste your OpenRouter / OpenAI / Stripe / Google keys.
+echo  Settings -^> "Connect your services" ^(passphrase: roastbox^)
+echo  is where you paste your OpenRouter / OpenAI / ElevenLabs /
+echo  Stripe / Google keys.
+echo.
+echo  Your database is NOT reset by this script. Re-running setup.bat is safe.
 echo ============================================================
 echo.
 
-if /i "%1"=="run" (
-  echo ==^> Starting backend
-  start "RoastBox API" cmd /k "cd /d %~dp0backend && ..\.venv\Scripts\uvicorn server:app --port 8001"
-  echo ==^> Starting frontend
-  cd frontend
-  call npm start
-)
+if /i "%~1"=="run" goto dorun
+goto done
+
+:dorun
+echo ==^> Starting backend in a new window
+start "RoastBox API" /D "%~dp0backend" cmd /k ..\.venv\Scripts\uvicorn server:app --port 8001
+timeout /t 4 /nobreak >nul
+echo ==^> Starting frontend in this window
+cd /d "%~dp0frontend"
+call yarn start
+goto done
+
+REM ================================================================= errors
+:nopython
+echo.
+echo ERROR: Python 3.11, 3.12 or 3.13 was not found.
+echo        Install it from https://www.python.org/downloads/windows/
+echo        During setup TICK "Add python.exe to PATH".
+echo        Prefer the python.org installer over the Microsoft Store build.
+echo.
+pause
+exit /b 1
+
+:badpython
+echo.
+echo ERROR: This project needs Python 3.11, 3.12 or 3.13.
+echo        Several pinned packages do not build on 3.10 or older.
+echo        Install a supported version from python.org and run setup.bat again.
+echo.
+pause
+exit /b 1
+
+:novenv
+echo.
+echo ERROR: Could not create the virtual environment .venv
+echo        Check that the folder is writable and that antivirus is not
+echo        blocking python.exe. Avoid running this from inside the ZIP viewer.
+echo.
+pause
+exit /b 1
+
+:nopip
+echo.
+echo ERROR: Could not upgrade pip.
+echo        Check your internet connection or corporate proxy settings.
+echo.
+pause
+exit /b 1
+
+:nodeps
+echo.
+echo ERROR: Backend dependency install failed.
+echo        Scroll up for the failing package.
+echo        Common causes: no internet, a proxy, antivirus blocking pip.
+echo.
+pause
+exit /b 1
+
+:nonode
+echo.
+echo ERROR: Node.js 18 or newer was not found.
+echo        Install the LTS build from https://nodejs.org/en/download
+echo        Node 20 or 22 LTS are the safest choices for this project.
+echo        Close this window, reopen a new Command Prompt, and retry so the
+echo        updated PATH takes effect.
+echo.
+pause
+exit /b 1
+
+:oldnode
+echo.
+echo ERROR: Node !NODEV! is too old. This project needs Node 18 or newer.
+echo        Install Node 20 or 22 LTS from https://nodejs.org/en/download
+echo.
+pause
+exit /b 1
+
+:noyarn
+echo.
+echo ERROR: yarn could not be installed automatically.
+echo        Install Node 18+ from https://nodejs.org first, then run:
+echo            npm install -g yarn
+echo        and run setup.bat again.
+echo.
+pause
+exit /b 1
+
+:badpkg
+echo.
+echo ERROR: Could not rewrite frontend\package.json
+echo        Restoring the original file.
+move /y package.json.bak package.json >nul
+cd ..
+pause
+exit /b 1
+
+:yarnfailed
+echo.
+echo ERROR: yarn install failed. Scroll up for the real error.
+echo        Common causes: no internet, a proxy, antivirus locking node_modules,
+echo        or an antivirus "protected folder" policy blocking writes.
+echo        If it mentions EPERM or EACCES, exclude the project folder from
+echo        real-time scanning and retry.
+echo.
+if exist yarn.lock.bak move /y yarn.lock.bak yarn.lock >nul
+move /y package.json.bak package.json >nul
+cd ..
+pause
+exit /b 1
+
+:noenv
+echo.
+echo ERROR: Could not create backend\.env
+echo        Check that backend\.env.example exists.
+echo.
+pause
+exit /b 1
+
+:done
 pause
