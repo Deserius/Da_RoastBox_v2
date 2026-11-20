@@ -1,0 +1,94 @@
+# FREE private beta only. No paid instance, disk, worker, database or trial.
+# Python/Mongo/FFmpeg/React remain intact; Mongo and PRIVATE media are external.
+# Do not deploy until docs/RENDER_DEPLOYMENT.md's data-preservation checklist passes.
+services:
+  - type: web
+    name: da-roastbox-beta
+    runtime: docker
+    plan: free
+    numInstances: 1
+    autoDeployTrigger: "off"
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/ready
+    envVars:
+      - key: APP_ENV
+        value: beta
+      - key: ALLOWED_HOSTS
+        sync: false
+      # APP_BASE_URL defaults to Render's RENDER_EXTERNAL_URL. Set it explicitly
+      # for a custom domain and update the managed Google/Stripe/email origins.
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DATA_IMPORT_CONFIRMED
+        sync: false
+      - key: STORAGE_BACKEND
+        value: vercel_blob
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false
+      - key: BETA_ACCESS_PASSWORD_HASH
+        sync: false
+      - key: BETA_ACCESS_SIGNING_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_DEFAULT_PROVIDER
+        value: openai
+      - key: ROAST_WRITER_PROVIDER
+        value: openrouter
+      - key: ROAST_WRITER_PROFILE
+        value: multimodal
+      - key: ROAST_OPENROUTER_MODELS
+        value: anthropic/claude-sonnet-4.5,openai/gpt-4.1,openai/gpt-4o
+      - key: ROAST_BACKUP_PROVIDERS
+        value: emergent,openai
+      - key: ROAST_FREE_WRITER_ONLY
+        value: "false"
+      - key: ROAST_ALLOW_PAID_WRITER_FALLBACK
+        value: "true"
+      - key: ROAST_SPEED_PROFILE
+        value: quality
+      - key: ROAST_TTS_CONCURRENCY
+        value: "4"
+      - key: REEL_ENCODER_PRESET
+        value: ultrafast
+      - key: STRIPE_TEST_ONLY
+        value: "true"
+      - key: STRIPE_API_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: ENABLE_PAID_DIAGNOSTICS
+        value: "false"
+      - key: ENABLE_PREVIEW_LOGIN
+        value: "true"
+      - key: ALLOW_PREVIEW_HOSTED_AI
+        value: "true"
+      - key: PREVIEW_UNLIMITED_CREDITS
+        value: "true"
+      - key: PREVIEW_HOSTED_DAILY_SHOW_LIMIT
+        value: "-1"
+      - key: PREVIEW_HOSTED_DAILY_VOICE_LIMIT
+        value: "-1"
+      - key: ALLOW_DEV_LOGIN
+        value: "false"
+      - key: ALLOW_SOURCE_DOWNLOAD
+        value: "false"
+      - key: EMAIL_AUTH_ENABLED
+        value: "false"
+      - key: EMAIL_TRANSPORT
+        value: resend
+      - key: REACT_APP_ENABLE_PREVIEW_LOGIN
+        value: "true"
+      - key: REACT_APP_ENABLE_SESSION_TUNNEL
+        value: "false"
+      - key: REACT_APP_SOURCE_DOWNLOAD_ENABLED
+        value: "false"
+      - key: REACT_APP_BACKEND_URL
+        value: ""
