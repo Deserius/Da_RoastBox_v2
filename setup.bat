@@ -1,9 +1,14 @@
 @echo off
 REM ==========================================================================
-REM  Da RoastBox - one-command local setup for Windows 10 / 11 (x64)
+REM  Da RoastBox - OPTIONAL frontend developer setup for Windows 10 / 11 (x64)
 REM
-REM  Why this script exists
-REM    install.bat runs "yarn install --frozen-lockfile", which always fails:
+REM  You do NOT need this script to run the app. RUN.bat / server.py serve the
+REM  prebuilt frontend/build folder directly - no Node.js or Yarn required.
+REM  Run this only if you want to edit the frontend's React source and rebuild
+REM  it with Yarn.
+REM
+REM  Why this script does its own thing instead of a plain "yarn install"
+REM    A plain "yarn install --frozen-lockfile" always fails here:
 REM    frontend/package.json pins two @emergentbase dev packages to tarballs on
 REM    assets.emergent.sh, a host that no longer resolves. Those packages only
 REM    provide the Emergent dev overlay and visual editor, and craco.config.js
@@ -150,56 +155,25 @@ echo ==^> Preparing backend\.env
 %PYEXE% scripts\make_env.py
 if errorlevel 1 goto noenv
 
-REM ---------------------------------------------------------------- MongoDB
-echo ==^> Checking for a database on port 27017
-set "MONGO_UP="
-powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "try{$c=New-Object Net.Sockets.TcpClient;$c.Connect('127.0.0.1',27017);if($c.Connected){$c.Close();exit 0}}catch{};exit 1" >nul 2>&1
-if not errorlevel 1 set "MONGO_UP=1"
-
 echo.
 echo ============================================================
-if defined MONGO_UP (
-  echo   Setup complete. A database answered on port 27017.
-) else (
-  echo   Setup complete - but NOTHING is answering on port 27017.
-  echo   The app cannot start until you provide a MongoDB.
-  echo.
-  echo   EASIEST - MongoDB Atlas. Works on any Windows 10 edition,
-  echo   no virtualization, no admin rights, no local install:
-  echo     1. Sign up free: https://www.mongodb.com/cloud/atlas/register
-  echo     2. Create a free M0 cluster.
-  echo     3. Database Access - add a user and a password.
-  echo     4. Network Access - Add IP Address - Allow Access From Anywhere.
-  echo     5. Connect - Drivers - copy the "mongodb+srv://..." string.
-  echo     6. Open backend\.env and replace the MONGO_URL line with it.
-  echo.
-  echo   LOCAL MongoDB on Windows 10:
-  echo     MongoDB 7.x for Windows x64 installs and runs on Windows 10.
-  echo     MongoDB only officially supports Windows 11 / Server 2022, so
-  echo     this is unsupported-but-working. Take the 7.0.x Windows x64 MSI
-  echo     from https://www.mongodb.com/try/download/community and install it
-  echo     as a service. Do NOT install the 8.x or 9.x Windows 11 build here.
-  echo.
-  echo   DOCKER - needs Docker Desktop with WSL2 or Hyper-V ^(Pro/Enterprise^):
-  echo     docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
-  echo.
-)
+echo   Frontend build tools are ready.
 echo ============================================================
 echo.
-echo  Start the app in TWO Command Prompt windows:
+echo  This only prepared Node/Yarn so you can edit and rebuild the
+echo  frontend's React source. To just RUN the app, you do not need this
+echo  script at all - double-click RUN.bat in the project root instead;
+echo  it serves the prebuilt frontend\build folder and needs no database.
 echo.
-echo    Window 1:  cd /d "%~dp0backend"
-echo               ..\.venv\Scripts\uvicorn server:app --port 8001
-echo.
-echo    Window 2:  cd /d "%~dp0frontend"
-echo               yarn start
-echo.
+echo  To develop the frontend with live reload:
+echo    Window 1:  cd /d "%~dp0backend" ^&^& ..\.venv\Scripts\python run_server.py --dev
+echo    Window 2:  cd /d "%~dp0frontend" ^&^& yarn start
 echo  Then open http://localhost:3000 and click "Browse as guest".
-echo  Settings -^> "Connect your services" ^(passphrase: roastbox^)
-echo  is where you paste your OpenRouter / OpenAI / ElevenLabs /
-echo  Stripe / Google keys.
 echo.
-echo  Your database is NOT reset by this script. Re-running setup.bat is safe.
+echo  When you're happy with your changes, rebuild the shipped copy with:
+echo    cd /d "%~dp0frontend" ^&^& set CI=false ^&^& yarn build
+echo.
+echo  Your data is NOT reset by this script. Re-running setup.bat is safe.
 echo ============================================================
 echo.
 

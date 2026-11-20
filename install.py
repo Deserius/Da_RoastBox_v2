@@ -1,609 +1,452 @@
 #!/usr/bin/env python3
-"""Install Da RoastBox locally, without changing system Node or MongoDB.
+"""Da RoastBox - API key setup (GUI).
 
-The prepared Windows download ships Python 3.13, installed application packages,
-Node, MongoDB, Yarn, FFmpeg and a prebuilt frontend. Its first-run dependency
-unpacking is offline. A source-only/changed/damaged setup uses supported Python
-3.11–3.13 and official verified downloads. Existing .env/data are preserved.
+A small desktop window for entering the API keys Da RoastBox talks to
+directly: OpenAI, OpenRouter, ElevenLabs, Stripe, and Google sign-in. Each
+key has a Verify button that makes one real, lightweight call to that
+provider so you know immediately whether it works. Save writes straight into
+backend/.env and persists there - nothing else needs to be running first.
+
+Needs nothing beyond a stock Python install (Tkinter + the standard library
+only, no pip install required), so it works before you have set up the
+backend's virtual environment.
+
+Run it:
+    python install.py
+
+Then start the app:
+    python server.py
 """
 from __future__ import annotations
 
-import argparse
-import hashlib
+import base64
 import json
-import re
-import socket
-import time
-import os
-import platform
-import shutil
+import queue
 import subprocess
 import sys
-import tarfile
-import tempfile
-import zipfile
-from pathlib import Path, PurePosixPath
-from urllib.request import Request, urlopen
+import threading
+import tkinter as tk
+import urllib.error
+import urllib.request
+from pathlib import Path
+from tkinter import messagebox, ttk
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parent
-TOOLS = ROOT / ".cache" / "local-tools"
-VENV = ROOT / ".venv"
-sys.path.insert(0, str(ROOT / "scripts"))
-from launcher_common import (NODE_VERSION, MONGO_VERSION, YARN_VERSION, IS_WINDOWS,
-                             AlreadyRunning, ProjectLock, app_ready, occupied,
-                             open_default_browser, port_number)
-from prepared_runtime import (load_manifest as load_prepared_manifest, prepared_python, prepared_tool,
-                              prepared_frontend, verify_bundle, materialize_frontend_assets)
-from dependency_discovery import discover
-from prepare_bundle import ensure_expanded
-from installer_storage import (GIB, MIB, DiskSpaceError, installation_environment,
-                               announce_storage, require_space, is_space_error,
-                               space_message, run_pip_install)
+BACKEND = ROOT / "backend"
+ENV_PATH = BACKEND / ".env"
+ENV_EXAMPLE = BACKEND / ".env.example"
+MAKE_ENV = ROOT / "scripts" / "make_env.py"
 
-YARN_SHA512 = "a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
-
-NODE_HASHES = {
-    "linux-x64.tar.gz": "b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406",
-    "linux-arm64.tar.gz": "f7a1e486dbc8b286847815b477d4fb5e9fb963ed4489c3e1588853d685f589f9",
-    "darwin-x64.tar.gz": "efcc2b0db6f94bf53eddb038fe2b370277a042bd29e4f19b8f8e23598795b819",
-    "darwin-arm64.tar.gz": "c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428",
-    "win-x64.zip": "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20",
-}
-MONGO_HASHES = {
-    "linux-x86_64-debian12": "0e869e044162d101d4ee468e89bc139628c4c9e041bdcdaec19bf99331827215",
-    "linux-x86_64-ubuntu2204": "8eef2a821651ac20f732b6636731a51b407675674ced8d7f1f1578ebc7aced43",
-    "linux-x86_64-ubuntu2404": "3e55cdcf7013fbc805d29d8195230df4b23c7688733ee15ad58ac6bc2a416611",
-    "linux-aarch64-ubuntu2204": "fe918ca853000d5b48fcd3b2bc6119c72f4aab9e2b04a9a10e42923cb3aef6a4",
-    "linux-aarch64-ubuntu2404": "52655dd90adf0dbcbb87011075233285f44e262048ea30a9a48ad2a834c67736",
-    "macos-arm64": "3255cbf2e70cc5de04220046e006067d20068656d1bfa674828768a51d20d5a6",
-    "macos-x86_64": "3d391b8c41df069671afaa88ca21def057178aecce1813437539143b71f28152",
-    "windows-x86_64": "6b021a0864494e4decf278b36477a29eb36072432773e4e62c2f42c302630db0",
-}
+TIMEOUT = 8
 
 
-def run(command, *, cwd=ROOT, env=None):
-    print("\n> " + " ".join(str(item) for item in command), flush=True)
-    command = [str(item) for item in command]
-    child_env = installation_environment(ROOT, env)
-    if "pip" in command and "install" in command:
-        run_pip_install(command, cwd=cwd, env=child_env, root=ROOT)
-    else:
-        subprocess.run(command, cwd=cwd, env=child_env, check=True)
-
-
-def download(url, destination, expected, algorithm="sha256"):
-    """Download over HTTPS and verify against our pinned vendor checksum."""
-    print(f"Downloading {url}", flush=True)
-    digest = hashlib.new(algorithm)
-    with urlopen(Request(url, headers={"User-Agent": "DaRoastBox-Installer/1.0"}), timeout=90) as response, destination.open("wb") as output:
-        total = 0
-        while True:
-            block = response.read(1024 * 1024)
-            if not block:
-                break
-            total += len(block)
-            # The official Windows MongoDB ZIP includes large debug symbols.
-            if total > 1200 * 1024 * 1024:
-                raise RuntimeError("Download exceeded the expected size limit")
-            digest.update(block)
-            output.write(block)
-    if digest.hexdigest() != expected:
-        destination.unlink(missing_ok=True)
-        raise RuntimeError("Download checksum mismatch; installation stopped. Retry or check your network.")
-    print("Verified download checksum.", flush=True)
-
-
-def copy_tar_member(archive, suffix, destination):
-    with tarfile.open(archive, "r:gz") as tar:
-        matches = [m for m in tar.getmembers() if m.isfile() and m.name.endswith(suffix)]
-        if len(matches) != 1:
-            raise RuntimeError(f"Unexpected archive layout: {suffix}")
-        source = tar.extractfile(matches[0])
-        if source is None:
-            raise RuntimeError("Could not read archive member")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with source, destination.open("wb") as target:
-            shutil.copyfileobj(source, target)
-    destination.chmod(0o755)
-
-
-def copy_zip_member(archive, suffix, destination):
-    with zipfile.ZipFile(archive) as zip_file:
-        matches = [name for name in zip_file.namelist() if name.endswith(suffix)]
-        if len(matches) != 1:
-            raise RuntimeError(f"Unexpected archive layout: {suffix}")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with zip_file.open(matches[0]) as source, destination.open("wb") as target:
-            shutil.copyfileobj(source, target)
-
-
-def system_arch():
-    value = platform.machine().lower()
-    if value in ("x86_64", "amd64", "x64"):
-        return "x64"
-    if value in ("arm64", "aarch64"):
-        return "arm64"
-    raise RuntimeError(f"Unsupported CPU architecture: {value}. See docs/LOCAL_INSTALL.md.")
-
-
-def node_target():
-    os_name = {"Windows": "win", "Darwin": "darwin", "Linux": "linux"}.get(platform.system())
-    arch = system_arch()
-    extension = "zip" if os_name == "win" else "tar.gz"
-    key = f"{os_name}-{arch}.{extension}"
-    if key not in NODE_HASHES:
-        raise RuntimeError(f"No bundled Node download for {platform.system()} {arch}. See docs/LOCAL_INSTALL.md.")
-    return key
-
-
-def mongo_target():
-    system, arch = platform.system(), system_arch()
-    mongo_arch = "x86_64" if arch == "x64" else "aarch64"
-    if system == "Windows" and arch == "x64":
-        return "windows-x86_64", "windows", "zip"
-    if system == "Darwin":
-        return f"macos-{'x86_64' if arch == 'x64' else 'arm64'}", "osx", "tgz"
-    if system == "Linux":
-        values = {}
-        os_release = Path("/etc/os-release")
-        if os_release.exists():
-            for line in os_release.read_text(errors="replace").splitlines():
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    values[key] = value.strip().strip('"')
-        ids = (values.get("ID", "") + " " + values.get("ID_LIKE", "")).lower().split()
-        major = values.get("VERSION_ID", "").split(".")[0]
-        if "ubuntu" in ids:
-            distro = "ubuntu2404" if major.isdigit() and int(major) >= 24 else "ubuntu2204"
-        elif "debian" in ids and arch == "x64":
-            distro = "debian12"
-            if major != "12":
-                print("Note: testing the Debian 12 MongoDB binary on this Debian-compatible system; official support may differ.", flush=True)
-        else:
-            raise RuntimeError("Automatic MongoDB download supports Ubuntu 22.04/24.04 and Debian x64. Use an existing MongoDB/Atlas and rerun with --skip-mongodb; see docs/LOCAL_INSTALL.md.")
-        key = f"linux-{mongo_arch}-{distro}"
-        if key in MONGO_HASHES:
-            return key, "linux", "tgz"
-    raise RuntimeError("No portable MongoDB for this OS/CPU. Configure an existing MongoDB/Atlas and rerun with --skip-mongodb; see docs/LOCAL_INSTALL.md.")
-
-
-def ensure_node(tmp):
-    if IS_WINDOWS:
-        bundled = prepared_tool(ROOT, "node")
-        if bundled:
-            run([bundled, "--version"])
-            return bundled
-    exe = TOOLS / f"node-{NODE_VERSION}" / ("node.exe" if IS_WINDOWS else "node")
-    if exe.is_file():
-        try:
-            run([exe, "--version"])
-            return exe
-        except (OSError, subprocess.CalledProcessError):
-            print("Restoring a Node executable that failed its runtime check.", flush=True)
-    if IS_WINDOWS and os.name == "nt":
-        installed = discover("node", expected_node=NODE_VERSION)
-        if installed:
-            print("Using a compatible installed Node.js; no duplicate download.", flush=True)
-            return installed
-    require_space(ROOT, 256 * MIB, "portable Node.js installation")
-    target = node_target()
-    filename = f"node-v{NODE_VERSION}-{target}"
-    archive = tmp / filename
-    download(f"https://nodejs.org/dist/v{NODE_VERSION}/{filename}", archive, NODE_HASHES[target])
-    if filename.endswith(".zip"):
-        copy_zip_member(archive, "/node.exe", exe)
-    else:
-        copy_tar_member(archive, "/bin/node", exe)
-    archive.unlink(missing_ok=True)  # Installer-owned vendor archive only.
-    run([exe, "--version"])
-    return exe
-
-
-def ensure_yarn(tmp, node):
-    if IS_WINDOWS:
-        bundled = prepared_tool(ROOT, "yarn")
-        if bundled:
-            run([node, bundled, "--version"])
-            return bundled
-    yarn_dir = TOOLS / f"yarn-{YARN_VERSION}"
-    yarn = yarn_dir / "bin" / "yarn.js"
-    ready = False
-    if yarn.is_file() and (yarn_dir / "lib" / "cli.js").is_file():
-        try:
-            run([node, yarn, "--version"])
-            ready = True
-        except (OSError, subprocess.CalledProcessError):
-            print("Restoring Yarn files that failed their runtime check.", flush=True)
-    if not ready:
-        require_space(ROOT, 64 * MIB, "portable Yarn installation")
-        archive = tmp / f"yarn-{YARN_VERSION}.tgz"
-        download(f"https://registry.npmjs.org/yarn/-/yarn-{YARN_VERSION}.tgz", archive, YARN_SHA512, "sha512")
-        # Extract only ordinary package files under the designated directory.
-        with tarfile.open(archive, "r:gz") as tar:
-            for member in tar.getmembers():
-                if not member.isfile() or not member.name.startswith("package/"):
-                    continue
-                relative = PurePosixPath(member.name).relative_to("package")
-                if ".." in relative.parts or relative.is_absolute():
-                    raise RuntimeError("Unsafe Yarn archive path")
-                target = yarn_dir.joinpath(*relative.parts)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                source = tar.extractfile(member)
-                if source is None:
-                    raise RuntimeError("Could not read Yarn archive")
-                with source, target.open("wb") as output:
-                    shutil.copyfileobj(source, output)
-        archive.unlink(missing_ok=True)
-    run([node, yarn, "--version"])
-    return yarn
-
-
-def ensure_windows_runtime(redist, *, force=False):
-    """Use Microsoft's redistributable from the checksum-verified Mongo ZIP."""
-    if not IS_WINDOWS:
+# --------------------------------------------------------------------- .env
+# No python-dotenv dependency here on purpose: install.py must run with a
+# bare "python install.py" before any pip install has happened.
+def ensure_env_file() -> None:
+    if ENV_PATH.exists():
         return
-    system = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
-    required = ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
-    if not force and (all((system / name).is_file() for name in required)
-                      or all((redist.parent / name).is_file() for name in required)):
-        return  # Prepared bundles include signed Microsoft app-local runtime DLLs.
-    if not redist.is_file():
-        raise RuntimeError("Microsoft Visual C++ 2015-2022 x64 runtime is missing. Run start.bat --repair to restore MongoDB's bundled runtime, or install it from Microsoft.")
-    print("Installing Microsoft's required Visual C++ x64 runtime. Approve the Windows permission prompt if shown.", flush=True)
-    # Start-Process performs the UAC handoff and waits for a real exit status.
-    # Escape a project path containing spaces or apostrophes; never use shell=True.
-    path = str(redist).replace("'", "''")
-    script = ("$ErrorActionPreference='Stop'; try { $p=Start-Process -FilePath '" + path +
-              "' -ArgumentList '/install /quiet /norestart' -Verb RunAs -Wait -PassThru; exit $p.ExitCode } catch { Write-Error $_; exit 1 }")
-    host = system / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-    if not host.is_file():
-        raise RuntimeError("The built-in Windows PowerShell host was not found. Ask your Windows administrator; no runtime or data was changed.")
-    result = subprocess.run([str(host), "-NoProfile", "-NonInteractive", "-Command", script], check=False)
-    code = result.returncode & 0xFFFFFFFF
-    if code not in (0, 1638, 3010, 0x80070666):
-        raise RuntimeError(f"Microsoft C++ runtime installation did not complete (exit {result.returncode}). Approve its permission request or install it manually, then rerun start.bat.")
-    if code == 3010:
-        print("Microsoft's runtime installer requested a Windows restart. If MongoDB cannot start, restart Windows and run start.bat again.", flush=True)
+    if MAKE_ENV.exists():
+        subprocess.run([sys.executable, str(MAKE_ENV)], check=False)
+    if ENV_PATH.exists():
+        return
+    # Last-resort fallback if the generator script is missing or failed.
+    import secrets
+
+    lines = []
+    if ENV_EXAMPLE.exists():
+        lines = [ln for ln in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
+                 if not ln.strip().startswith(("MONGO_URL=", "DB_NAME=", "JWT_SECRET="))]
+    lines += ["", "MONGO_URL=embedded", "DB_NAME=roastbox", f"JWT_SECRET={secrets.token_hex(32)}"]
+    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def ensure_mongo(tmp):
-    if IS_WINDOWS:
-        bundled = prepared_tool(ROOT, "mongod")
-        if bundled:
-            ensure_windows_runtime(bundled.parent / "vc_redist.x64.exe")
-            run([bundled, "--version"])
-            return bundled
-        if os.name == "nt":
-            installed = discover("mongod")
-            if installed:
-                print("Using an installed MongoDB 8.0 executable; no duplicate download.", flush=True)
-                return installed
-    base = TOOLS / f"mongodb-{MONGO_VERSION}"
-    name = "mongod.exe" if IS_WINDOWS else "mongod"
-    candidates = (base / name, base / "bin" / name)
-    for exe in candidates:
-        if exe.is_file():
-            try:
-                run([exe, "--version"])
-                return exe
-            except (OSError, subprocess.CalledProcessError):
-                if IS_WINDOWS and (exe.parent / "vc_redist.x64.exe").is_file():
-                    ensure_windows_runtime(exe.parent / "vc_redist.x64.exe", force=True)
-                    run([exe, "--version"])
-                    return exe
-                print("Cached MongoDB did not pass its runtime check; restoring verified program files only (not data).", flush=True)
-    exe = base / name
-    target, section, extension = mongo_target()
-    require_space(ROOT, (1536 if extension == "zip" else 512) * MIB, "portable MongoDB download/extraction")
-    filename = f"mongodb-{target}-{MONGO_VERSION}.{extension}"
-    archive = tmp / filename
-    download(f"https://fastdl.mongodb.org/{section}/{filename}", archive, MONGO_HASHES[target])
-    if extension == "zip":
-        copy_zip_member(archive, "/bin/mongod.exe", exe)
-        # The original installer discarded this required Windows dependency.
-        copy_zip_member(archive, "/bin/vc_redist.x64.exe", base / "vc_redist.x64.exe")
-        archive.unlink(missing_ok=True)
-        ensure_windows_runtime(base / "vc_redist.x64.exe")
-    else:
-        copy_tar_member(archive, "/bin/mongod", exe)
-        archive.unlink(missing_ok=True)
-    try:
-        run([exe, "--version"])
-    except (OSError, subprocess.CalledProcessError) as exc:
-        if IS_WINDOWS:
-            ensure_windows_runtime(base / "vc_redist.x64.exe", force=True)
-            try:
-                run([exe, "--version"])
-                return exe
-            except (OSError, subprocess.CalledProcessError):
-                pass
-        raise RuntimeError("MongoDB could not run. Check the Microsoft C++ runtime, 64-bit/AVX CPU support and OS libraries; use an existing database with --skip-mongodb if needed. No database files were removed.") from exc
-    return exe
-
-
-def fingerprint(paths, extra=""):
-    digest = hashlib.sha256(extra.encode())
-    for path in sorted(paths, key=lambda p: str(p)):
-        if path.is_file():
-            digest.update(str(path.relative_to(ROOT)).replace("\\", "/").encode())
-            digest.update(path.read_bytes())
-    return digest.hexdigest()
-
-
-def cache_matches(name, value):
-    try:
-        return json.loads((ROOT / ".cache" / name).read_text()).get("fingerprint") == value
-    except (OSError, ValueError, TypeError, AttributeError):
-        return False
-
-
-def save_cache(name, value):
-    destination = ROOT / ".cache" / name
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"fingerprint": value, "schema": 1}) + "\n")
-    temporary.replace(destination)
-
-
-PYTHON_CHECK = r'''import importlib, importlib.metadata as md, json, pathlib, sys
-from packaging.requirements import Requirement
-def check_requirements(path):
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
-        raw = raw.split(" #", 1)[0].strip()
-        if not raw or raw.startswith("#"): continue
-        if raw.startswith("-r "):
-            check_requirements(path.parent / raw[3:].strip())
+def read_env() -> dict:
+    values: dict[str, str] = {}
+    if not ENV_PATH.exists():
+        return values
+    for line in ENV_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#") or "=" not in s:
             continue
-        req = Requirement(raw)
-        if req.marker and not req.marker.evaluate(): continue
-        dist = md.distribution(req.name)
-        if req.specifier and dist.version not in req.specifier: raise RuntimeError("version mismatch")
-        if req.url and "#sha256=" in req.url:
-            direct = json.loads(dist.read_text("direct_url.json") or "{}")
-            info = direct.get("archive_info", {})
-            actual = info.get("hashes", {}).get("sha256") or str(info.get("hash", "")).removeprefix("sha256=")
-            if actual != req.url.split("#sha256=", 1)[1]: raise RuntimeError("direct wheel mismatch")
-check_requirements(pathlib.Path(sys.argv[1]))
-for name in ("fastapi", "uvicorn", "pymongo", "motor", "PIL.Image", "openai", "elevenlabs", "dotenv", "imageio_ffmpeg", "stripe", "cryptography.fernet", "vercel.blob", "httpx2", "numpy", "mutagen"):
-    importlib.import_module(name)
-import imageio_ffmpeg
-imageio_ffmpeg.get_ffmpeg_version()
-'''
+        key, _, val = s.partition("=")
+        key = key.strip()
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        values[key] = val
+    return values
 
 
-def python_dependencies_ready(python):
+def write_env_value(key: str, value: str) -> None:
+    """Set one KEY=value in backend/.env, preserving every other line."""
+    ensure_env_file()
+    text = ENV_PATH.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+    needs_quotes = any(c in value for c in (" ", "#")) and not (
+        len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'"
+    )
+    new_value = f'"{value}"' if needs_quotes else value
+    out_line = f"{key}={new_value}"
+    replaced = False
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("#") or "=" not in s:
+            continue
+        existing_key = s.split("=", 1)[0].strip()
+        if existing_key == key:
+            lines[i] = out_line
+            replaced = True
+            break
+    if not replaced:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(out_line)
+    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------- verifiers
+# Each returns (status, message). status is one of "ok", "bad", "warn".
+def _get(url: str, headers: dict) -> tuple[int, bytes]:
+    req = urllib.request.Request(url, headers=headers, method="GET")
     try:
-        return subprocess.run([str(python), "-c", PYTHON_CHECK, str(ROOT / "backend/requirements.txt")],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                              env=installation_environment(ROOT), timeout=90).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
 
 
-def frontend_dependencies_ready(node, env):
-    frontend = ROOT / "frontend"
-    if not (frontend / "node_modules/.yarn-integrity").is_file():
-        return False
-    script = "for(const p of ['react','react-dom','axios','@craco/craco','http-proxy-middleware']) require.resolve(p);"
+def verify_openai(key: str) -> tuple[str, str]:
     try:
-        return subprocess.run([str(node), "-e", script], cwd=frontend, env=env,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+        status, body = _get("https://api.openai.com/v1/models",
+                             {"Authorization": f"Bearer {key}"})
+    except Exception as exc:  # noqa: BLE001
+        return "warn", f"Could not reach OpenAI ({exc.__class__.__name__}). Saved, not verified."
+    if status == 200:
+        return "ok", "Valid - OpenAI accepted this key."
+    if status == 401:
+        return "bad", "OpenAI rejected this key (401 Unauthorized)."
+    return "warn", f"OpenAI returned HTTP {status}; could not confirm."
 
 
-def build_ready():
-    build = ROOT / "frontend/build"
+def verify_openrouter(key: str) -> tuple[str, str]:
     try:
-        manifest = json.loads((build / "asset-manifest.json").read_text())
-        return (build / "index.html").is_file() and bool(manifest.get("files")) and all(
-            (build / value.lstrip("/")).is_file() for value in manifest["files"].values() if isinstance(value, str) and not value.startswith(("http:", "https:")))
-    except (OSError, ValueError, TypeError, AttributeError):
-        return False
+        status, body = _get("https://openrouter.ai/api/v1/auth/key",
+                             {"Authorization": f"Bearer {key}"})
+    except Exception as exc:  # noqa: BLE001
+        return "warn", f"Could not reach OpenRouter ({exc.__class__.__name__}). Saved, not verified."
+    if status == 200:
+        return "ok", "Valid - OpenRouter accepted this key."
+    if status == 401:
+        return "bad", "OpenRouter rejected this key (401 Unauthorized)."
+    return "warn", f"OpenRouter returned HTTP {status}; could not confirm."
 
 
-def configured_mongo_uri():
-    if os.environ.get("MONGO_URL"):
-        return os.environ["MONGO_URL"]
-    path = ROOT / "backend/.env"
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8-sig").splitlines():
-            match = re.match(r"^\s*(?:export\s+)?MONGO_URL\s*=\s*(.*)$", line)
-            if match:
-                return match[1].strip().strip("\"'")
-    return "mongodb://127.0.0.1:27017"
-
-
-def need_portable_database():
-    from urllib.parse import urlsplit
+def verify_elevenlabs(key: str) -> tuple[str, str]:
     try:
-        parsed = urlsplit(configured_mongo_uri())
-        plain_local = (parsed.scheme == "mongodb" and parsed.hostname in ("127.0.0.1", "localhost")
-                       and not parsed.username and not parsed.password and not parsed.query
-                       and not parsed.fragment and parsed.path in ("", "/") and "," not in parsed.netloc)
-        return plain_local and not occupied(parsed.port or 27017)
-    except ValueError:
-        return False
+        status, body = _get("https://api.elevenlabs.io/v1/user", {"xi-api-key": key})
+    except Exception as exc:  # noqa: BLE001
+        return "warn", f"Could not reach ElevenLabs ({exc.__class__.__name__}). Saved, not verified."
+    if status == 200:
+        return "ok", "Valid - ElevenLabs accepted this key."
+    if status == 401:
+        return "bad", "ElevenLabs rejected this key (401 Unauthorized)."
+    return "warn", f"ElevenLabs returned HTTP {status}; could not confirm."
 
 
-def ensure_virtualenv(*, prefer_prepared=True):
-    if IS_WINDOWS and prefer_prepared:
-        bundled = prepared_python(ROOT)
-        if bundled and verify_bundle(ROOT, prefix="runtime/windows-x64/python/"):
-            print("Using the preinstalled Windows Python packages and FFmpeg; no pip installation needed.", flush=True)
-            return bundled
-    python = VENV / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
-    if python.is_file():
+def verify_stripe(key: str) -> tuple[str, str]:
+    token = base64.b64encode(f"{key}:".encode("ascii")).decode("ascii")
+    try:
+        status, body = _get("https://api.stripe.com/v1/balance",
+                             {"Authorization": f"Basic {token}"})
+    except Exception as exc:  # noqa: BLE001
+        return "warn", f"Could not reach Stripe ({exc.__class__.__name__}). Saved, not verified."
+    if status == 200:
+        mode = "TEST mode" if key.startswith(("sk_test_", "rk_test_")) else "LIVE mode"
+        return "ok", f"Valid - Stripe accepted this key ({mode})."
+    if status == 401:
+        return "bad", "Stripe rejected this key (401 Unauthorized)."
+    return "warn", f"Stripe returned HTTP {status}; could not confirm."
+
+
+def verify_stripe_webhook(secret: str) -> tuple[str, str]:
+    if secret.startswith("whsec_") and len(secret) >= 16:
+        return "ok", "Looks like a Stripe webhook secret. Stripe only confirms this when it sends a real webhook."
+    return "warn", "Stripe webhook secrets normally start with 'whsec_'. Saved as entered."
+
+
+def verify_google_id(client_id: str) -> tuple[str, str]:
+    if client_id.endswith(".apps.googleusercontent.com"):
+        return "ok", "Looks like a Google OAuth client ID."
+    return "warn", "Google client IDs usually end with '.apps.googleusercontent.com'. Saved as entered."
+
+
+def verify_google_secret(client_id: str, client_secret: str) -> tuple[str, str]:
+    if not client_id:
+        return "warn", "Enter the matching Google client ID above, then verify again."
+    data = urlencode({
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "authorization_code",
+        "code": "da-roastbox-key-check",
+        "redirect_uri": "http://localhost",
+    }).encode("ascii")
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, method="POST")
+    try:
         try:
-            result = subprocess.run([str(python), "-c", "import sys; assert (3,11) <= sys.version_info[:2] <= (3,13) and (sys.platform != 'win32' or sys.maxsize > 2**32)"],
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
-            if result.returncode == 0:
-                return python
-        except (OSError, subprocess.TimeoutExpired):
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+                body = resp.read()
+        except urllib.error.HTTPError as exc:
+            body = exc.read()
+        payload = json.loads(body.decode("utf-8", errors="replace"))
+    except Exception as exc:  # noqa: BLE001
+        return "warn", f"Could not reach Google ({exc.__class__.__name__}). Saved, not verified."
+    error = payload.get("error", "")
+    if error == "invalid_client":
+        return "bad", "Google rejected this client ID/secret pair."
+    if error:
+        # invalid_grant / redirect_uri_mismatch / etc: Google validated the
+        # client credentials themselves before rejecting our fake code.
+        return "ok", "Valid - Google recognises this client ID/secret pair."
+    return "warn", "Unexpected response from Google; could not confirm."
+
+
+# ------------------------------------------------------------------- fields
+# key, label, placeholder, verify(values) -> (status, message)
+FIELDS = [
+    ("OPENAI_API_KEY", "OpenAI API key", "sk-...",
+     lambda v: verify_openai(v["OPENAI_API_KEY"])),
+    ("OPENROUTER_API_KEY", "OpenRouter API key", "sk-or-...",
+     lambda v: verify_openrouter(v["OPENROUTER_API_KEY"])),
+    ("ELEVENLABS_API_KEY", "ElevenLabs API key", "",
+     lambda v: verify_elevenlabs(v["ELEVENLABS_API_KEY"])),
+    ("STRIPE_API_KEY", "Stripe secret key", "sk_live_... or sk_test_...",
+     lambda v: verify_stripe(v["STRIPE_API_KEY"])),
+    ("STRIPE_WEBHOOK_SECRET", "Stripe webhook signing secret", "whsec_...",
+     lambda v: verify_stripe_webhook(v["STRIPE_WEBHOOK_SECRET"])),
+    ("GOOGLE_CLIENT_ID", "Google OAuth client ID", "....apps.googleusercontent.com",
+     lambda v: verify_google_id(v["GOOGLE_CLIENT_ID"])),
+    ("GOOGLE_CLIENT_SECRET", "Google OAuth client secret", "",
+     lambda v: verify_google_secret(v["GOOGLE_CLIENT_ID"], v["GOOGLE_CLIENT_SECRET"])),
+]
+
+OPTIONAL_FIELDS = [
+    ("BLOB_READ_WRITE_TOKEN", "Vercel Blob read/write token (optional media storage)"),
+    ("EMERGENT_LLM_KEY", "Emergent gateway key (optional, legacy fallback)"),
+]
+
+STATUS_COLORS = {"ok": "#1a7f37", "bad": "#c21807", "warn": "#9a6700", "": "#666666"}
+STATUS_ICON = {"ok": "\u2713", "bad": "\u2717", "warn": "\u26A0", "": ""}
+
+
+class KeyRow:
+    def __init__(self, parent: ttk.Frame, row: int, key: str, label: str, placeholder: str,
+                 verifier, get_values, on_saved) -> None:
+        self.key = key
+        self.verifier = verifier
+        self.get_values = get_values
+        self.on_saved = on_saved
+
+        ttk.Label(parent, text=label, width=30).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
+
+        self.shown = tk.BooleanVar(value=False)
+        self.var = tk.StringVar()
+        self.entry = ttk.Entry(parent, textvariable=self.var, width=38, show="\u2022")
+        self.entry.grid(row=row, column=1, sticky="we", padx=(0, 4), pady=4)
+        if placeholder:
+            self._placeholder = placeholder
+
+        self.toggle_btn = ttk.Button(parent, text="\U0001F441", width=3, command=self._toggle)
+        self.toggle_btn.grid(row=row, column=2, padx=2)
+
+        self.verify_btn = ttk.Button(parent, text="Verify", command=self.verify)
+        self.verify_btn.grid(row=row, column=3, padx=2)
+
+        self.save_btn = ttk.Button(parent, text="Save", command=self.save)
+        self.save_btn.grid(row=row, column=4, padx=2)
+
+        self.status_var = tk.StringVar(value="not set")
+        self.status_label = ttk.Label(parent, textvariable=self.status_var, width=46, foreground="#666666")
+        self.status_label.grid(row=row + 1, column=1, columnspan=4, sticky="w", padx=(0, 4))
+
+    def _toggle(self) -> None:
+        self.shown.set(not self.shown.get())
+        self.entry.configure(show="" if self.shown.get() else "\u2022")
+
+    def set_value(self, value: str) -> None:
+        self.var.set(value)
+        if value:
+            self.status_var.set("saved in backend/.env - click Verify to check it")
+            self.status_label.configure(foreground=STATUS_COLORS[""])
+
+    def value(self) -> str:
+        return self.var.get().strip()
+
+    def _set_status(self, status: str, message: str) -> None:
+        icon = STATUS_ICON.get(status, "")
+        self.status_var.set((icon + " " + message).strip())
+        self.status_label.configure(foreground=STATUS_COLORS.get(status, "#666666"))
+
+    def verify(self) -> None:
+        value = self.value()
+        if not value:
+            self._set_status("warn", "Nothing entered yet.")
+            return
+        self.verify_btn.configure(state="disabled")
+        self._set_status("", "Checking...")
+
+        def work():
+            try:
+                status, message = self.verifier(self.get_values())
+            except Exception as exc:  # noqa: BLE001
+                status, message = "warn", f"Could not verify ({exc.__class__.__name__})."
+            self.result_queue.put((self._set_status, (status, message)))
+            self.result_queue.put((self.verify_btn.configure, {"state": "normal"}))
+
+        self._run_async(work)
+
+    def save(self) -> None:
+        value = self.value()
+        write_env_value(self.key, value)
+        if value:
+            self._set_status("", "Saved to backend/.env.")
+        else:
+            self._set_status("", "Cleared in backend/.env.")
+        self.on_saved(self.key)
+
+    def _run_async(self, fn) -> None:
+        threading.Thread(target=fn, daemon=True).start()
+
+
+class App:
+    def __init__(self, root: tk.Tk) -> None:
+        self.root = root
+        root.title("Da RoastBox - API Key Setup")
+        root.minsize(760, 560)
+
+        self.queue: "queue.Queue" = queue.Queue()
+
+        header = ttk.Frame(root, padding=(16, 14, 16, 4))
+        header.pack(fill="x")
+        ttk.Label(header, text="Da RoastBox - API Key Setup", font=("TkDefaultFont", 14, "bold")).pack(anchor="w")
+        ttk.Label(
+            header,
+            text=("Enter the keys for the services this app talks to directly. Verify makes a quick,\n"
+                  f"real check against that provider. Save writes straight into {ENV_PATH.relative_to(ROOT)} "
+                  "and sticks around across restarts."),
+            justify="left",
+        ).pack(anchor="w", pady=(4, 0))
+
+        body = ttk.Frame(root, padding=16)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(1, weight=1)
+
+        existing = read_env()
+        self.rows: list[KeyRow] = []
+        row_index = 0
+        for key, label, placeholder, verifier in FIELDS:
+            row = KeyRow(body, row_index, key, label, placeholder, verifier, self._current_values, self._on_saved)
+            row.result_queue = self.queue
+            row.set_value(existing.get(key, ""))
+            self.rows.append(row)
+            row_index += 2
+
+        ttk.Separator(body, orient="horizontal").grid(
+            row=row_index, column=0, columnspan=5, sticky="we", pady=10)
+        row_index += 1
+
+        self.show_optional = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            body, text="Show optional/advanced fields (Vercel Blob, Emergent gateway)",
+            variable=self.show_optional, command=lambda: self._toggle_optional(body, row_index),
+        ).grid(row=row_index, column=0, columnspan=5, sticky="w")
+        row_index += 1
+        self._optional_start_row = row_index
+        self._optional_widgets: list[tk.Widget] = []
+
+        footer = ttk.Frame(root, padding=(16, 4, 16, 16))
+        footer.pack(fill="x")
+        ttk.Button(footer, text="Verify All", command=self.verify_all).pack(side="left")
+        ttk.Button(footer, text="Save All", command=self.save_all).pack(side="left", padx=8)
+        ttk.Button(footer, text="Close", command=root.destroy).pack(side="right")
+
+        self.status_var = tk.StringVar(value=f"Reading/writing {ENV_PATH}")
+        ttk.Label(root, textvariable=self.status_var, padding=(16, 0, 16, 10), foreground="#666").pack(anchor="w")
+
+        self.root.after(100, self._poll_queue)
+
+    def _toggle_optional(self, body: ttk.Frame, start_row: int) -> None:
+        for w in self._optional_widgets:
+            w.destroy()
+        self._optional_widgets = []
+        if not self.show_optional.get():
+            return
+        existing = read_env()
+        r = start_row
+        for key, label in OPTIONAL_FIELDS:
+            lbl = ttk.Label(body, text=label, width=30)
+            lbl.grid(row=r, column=0, sticky="w", pady=4)
+            var = tk.StringVar(value=existing.get(key, ""))
+            entry = ttk.Entry(body, textvariable=var, width=38)
+            entry.grid(row=r, column=1, sticky="we", pady=4)
+
+            def make_save(k=key, v=var):
+                def _save():
+                    write_env_value(k, v.get().strip())
+                    messagebox.showinfo("Saved", f"{k} saved to backend/.env")
+                return _save
+
+            btn = ttk.Button(body, text="Save", command=make_save())
+            btn.grid(row=r, column=4, padx=2)
+            self._optional_widgets += [lbl, entry, btn]
+            r += 1
+
+    def _current_values(self) -> dict:
+        return {row.key: row.value() for row in self.rows}
+
+    def _on_saved(self, key: str) -> None:
+        self.status_var.set(f"Saved {key} to backend/.env just now.")
+
+    def verify_all(self) -> None:
+        for row in self.rows:
+            if row.value():
+                row.verify()
+
+    def save_all(self) -> None:
+        count = 0
+        for row in self.rows:
+            write_env_value(row.key, row.value())
+            count += 1
+        self.status_var.set(f"Saved {count} field(s) to backend/.env.")
+        messagebox.showinfo("Saved", "All keys were saved to backend/.env.\n\nYou can close this window and run:\n    python server.py")
+
+    def _poll_queue(self) -> None:
+        try:
+            while True:
+                fn, args = self.queue.get_nowait()
+                if isinstance(args, dict):
+                    fn(**args)
+                else:
+                    fn(*args)
+        except queue.Empty:
             pass
-        # A copied/moved venv is disposable, but preserve it rather than delete.
-        backup = ROOT / ".cache" / f"old-venv-{time.time_ns()}"
-        backup.parent.mkdir(parents=True, exist_ok=True)
-        VENV.replace(backup)
-        print("Preserved an unusable virtual environment in .cache; creating a working one. Database and settings were not touched.", flush=True)
-    require_space(ROOT, 128 * MIB, "Python virtual environment creation")
-    print("Creating project-local Python virtual environment...", flush=True)
-    # A child process lets ensurepip inherit project-local TEMP/TMP too.
-    run([sys.executable, "-m", "venv", VENV])
-    return python
+        self.root.after(100, self._poll_queue)
 
 
-def install_and_launch(args):
-    print("Da RoastBox one-click setup. Existing .env files, database and generated media are preserved.", flush=True)
-    print("Only missing/changed dependencies and builds are installed. No AI or payment calls are made.", flush=True)
-    announce_storage(ROOT)
-    if IS_WINDOWS:
-        ensure_expanded(ROOT, allow_online_fallback=True)
-    env = installation_environment(ROOT)
-    TOOLS.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="install-", dir=TOOLS) as temporary:
-        tmp = Path(temporary)
-        node = ensure_node(tmp)
-        python = ensure_virtualenv(prefer_prepared=not (args.repair or args.with_browser_tests))
-        yarn = None
-        py_hash = fingerprint([ROOT / "backend/requirements.txt", ROOT / "backend/requirements-runtime.txt"], extra=f"python-v3:{sys.version}:{platform.machine()}:{python}")
-        preinstalled = IS_WINDOWS and python == prepared_python(ROOT)
-        prepared_ready = preinstalled and python_dependencies_ready(python)
-        if preinstalled and not prepared_ready:
-            print("The prepared Python runtime failed its native check; using a separate repair venv. The packaged runtime and data are preserved.", flush=True)
-            python = ensure_virtualenv(prefer_prepared=False)
-            preinstalled = False
-            py_hash = fingerprint([ROOT / "backend/requirements.txt", ROOT / "backend/requirements-runtime.txt"], extra=f"python-v3:{sys.version}:{platform.machine()}:{python}")
-        if not args.repair and (cache_matches("python-dependencies.json", py_hash) or preinstalled) and (prepared_ready or python_dependencies_ready(python)):
-            print("Python dependencies and bundled FFmpeg are already ready.", flush=True)
-            save_cache("python-dependencies.json", py_hash)
-        else:
-            require_space(ROOT, 2 * GIB, "Python package installation")
-            command = [python, "-m", "pip", "install", "--require-virtualenv", "--disable-pip-version-check", "--no-cache-dir"]
-            if args.repair:
-                command.append("--force-reinstall")
-            run([*command, "-r", ROOT / "backend/requirements.txt"])
-            if not python_dependencies_ready(python):
-                raise RuntimeError("Python dependency checks failed. Review setup errors, or retry start.bat --repair. No server was started.")
-            save_cache("python-dependencies.json", py_hash)
-        if args.with_browser_tests:
-            require_space(ROOT, GIB, "optional browser-test packages and Chromium")
-            run([python, "-m", "pip", "install", "--require-virtualenv", "--disable-pip-version-check", "--no-cache-dir", "-r", ROOT / "requirements-test.txt"])
-            run([python, "-m", "playwright", "install", "chromium"])
-        run([python, ROOT / "scripts/init_env.py", "--preview"])
-        if getattr(args, "configure_writer", False):
-            run([python, ROOT / "backend/scripts/configure_writer.py", "--apply"])
-        if not args.skip_mongodb and need_portable_database():
-            mongo = ensure_mongo(tmp)
-            env["ROASTBOX_MONGOD_EXE"] = str(mongo)
-        else:
-            print("Using the configured/existing database; no unnecessary MongoDB download. Launcher will verify it before starting.", flush=True)
-        # Missing frontend source packages are irrelevant when the shipped build
-        # matches source + public configuration. No node_modules/Yarn install.
-        use_prebuilt = (not args.repair and prepared_frontend(ROOT, env)
-                        and materialize_frontend_assets(ROOT)
-                        and verify_bundle(ROOT, prefix="frontend/build/") and build_ready())
-        if not use_prebuilt:
-            yarn = ensure_yarn(tmp, node)
-    env["ROASTBOX_NODE_EXE"] = str(node)
-    env["PATH"] = str(node.parent) + os.pathsep + str(python.parent) + os.pathsep + env.get("PATH", "")
-    # This is a local, same-origin build. Preserve frontend/.env on disk but
-    # never bake an old remote/localhost:8000 backend URL into the local browser.
-    env["REACT_APP_BACKEND_URL"] = ""
-    env["PUBLIC_URL"] = ""
-    env["CI"] = "true"
-    env.setdefault("NODE_OPTIONS", "--max-old-space-size=1024")
-    if use_prebuilt:
-        print("Using the prebuilt matching frontend. No frontend install/build needed.", flush=True)
-    else:
-        front_hash = fingerprint([ROOT / "frontend/package.json", ROOT / "frontend/yarn.lock"],
-                                 extra=f"frontend-v2:{NODE_VERSION}:{platform.system()}:{platform.machine()}")
-        if not args.repair and cache_matches("frontend-dependencies.json", front_hash) and frontend_dependencies_ready(node, env):
-            print("Frontend dependencies are already ready.", flush=True)
-        else:
-            require_space(ROOT, 1536 * MIB, "frontend dependency installation")
-            command = [node, yarn, "install", "--frozen-lockfile", "--ignore-engines", "--non-interactive", "--check-files", "--cache-folder", env["YARN_CACHE_FOLDER"]]
-            if args.repair:
-                command.append("--force")
-            run(command, cwd=ROOT / "frontend", env=env)
-            if not frontend_dependencies_ready(node, env):
-                raise RuntimeError("Frontend dependency check failed. Retry start.bat --repair or review the errors above.")
-            save_cache("frontend-dependencies.json", front_hash)
-        files = [p for part in ("src", "public") for p in (ROOT / "frontend" / part).rglob("*") if p.is_file()]
-        files += [p for p in (ROOT / "frontend").iterdir() if p.is_file() and (p.suffix in (".js", ".cjs", ".json") or p.name.startswith(".env"))]
-        extra = front_hash + json.dumps({k: v for k, v in sorted(env.items()) if k.startswith("REACT_APP_")}, sort_keys=True)
-        build_hash = fingerprint(files, extra=extra)
-        if not args.repair and cache_matches("frontend-build.json", build_hash) and build_ready():
-            print("Frontend build is current; no rebuild needed.", flush=True)
-        else:
-            require_space(ROOT, 512 * MIB, "frontend production build")
-            print("Building the local frontend. First setup/source changes can take a few minutes...", flush=True)
-            run([node, yarn, "build"], cwd=ROOT / "frontend", env=env)
-            if not build_ready():
-                raise RuntimeError("Frontend build is incomplete. The browser was not opened.")
-            save_cache("frontend-build.json", build_hash)
-    print("\nDependencies and frontend are ready.", flush=True)
-    if args.start:
-        command = [python, ROOT / "scripts/local_start.py"]
-        if args.no_browser:
-            command.append("--no-browser")
-        if args.skip_mongodb:
-            command.append("--external-db")
-        if args.port is not None:
-            command.extend(["--port", str(args.port)])
-        if args.api_port is not None:
-            command.extend(["--api-port", str(args.api_port)])
-        run(command, env=env)
-    else:
-        print("Setup complete. Double-click start.bat to start the app and open your default browser.", flush=True)
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="Install dependencies, build Da RoastBox and optionally launch it")
-    parser.add_argument("--skip-mongodb", action="store_true", help="Use your existing local/remote database; do not download or start a portable database")
-    parser.add_argument("--with-browser-tests", action="store_true", help="Install optional Playwright/Chromium tests")
-    parser.add_argument("--start", action="store_true", help="Start servers and open the default browser after setup")
-    parser.add_argument("--no-browser", action="store_true", help="Suppress browser launch for headless/automated use")
-    parser.add_argument("--configure-writer", action="store_true", help="Explicitly apply the requested paid Claude/GPT OpenRouter chain, preserving keys/data")
-    parser.add_argument("--repair", action="store_true", help="Reinstall Python/frontend packages and force a fresh build")
-    parser.add_argument("--port", type=int, help="Frontend port (default PORT or 3000)")
-    parser.add_argument("--api-port", type=int, help="Backend port (default API_PORT or 8001)")
-    args = parser.parse_args(argv)
-    for name in ("backend/requirements.txt", "frontend/package.json", "frontend/yarn.lock", "scripts/local_start.py", "scripts/serve-preview.cjs", "scripts/installer_storage.py", "backend/.env.example", "frontend/.env.example"):
-        if not (ROOT / name).is_file():
-            raise RuntimeError("Project files are missing. Extract the complete ZIP to a writable folder before running start.bat.")
-    if not ((3, 11) <= sys.version_info[:2] <= (3, 13)):
-        raise RuntimeError("Python 3.11, 3.12 or 3.13 is required. start.bat can install Python 3.13 on Windows.")
-    if IS_WINDOWS and sys.maxsize <= 2**32:
-        raise RuntimeError("64-bit Python is required on Windows. Double-click LAUNCH_DA_ROASTBOX.bat to discover/install a supported x64 interpreter.")
-    ui = port_number(args.port if args.port is not None else os.environ.get("PORT", "3000"), "Frontend port")
-    api = port_number(args.api_port if args.api_port is not None else os.environ.get("API_PORT", "8001"), "API port")
-    if ui == api:
-        raise RuntimeError("Frontend and API ports must differ (defaults: 3000 and 8001).")
-    if app_ready(ui, api):
-        if args.repair or args.configure_writer or not args.start:
-            raise RuntimeError("Da RoastBox is already running. Stop its web-server window before changing dependencies; leave MongoDB running.")
-        print(f"Da RoastBox is already running at http://127.0.0.1:{ui}. No duplicate installation/server was started.", flush=True)
-        if not args.no_browser:
-            open_default_browser(f"http://127.0.0.1:{ui}")
-        return
-    if args.start:
-        for label, number in (("Frontend", ui), ("API", api)):
-            if occupied(number):
-                raise RuntimeError(f"{label} port {number} is already occupied. No existing process was stopped. Close the conflicting web server or choose another port.")
-    with ProjectLock(ROOT / ".cache" / "install.lock"):
-        install_and_launch(args)
+def main() -> int:
+    ensure_env_file()
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        print("Could not open a desktop window (no display available).", file=sys.stderr)
+        print(f"Details: {exc}", file=sys.stderr)
+        print("Edit backend/.env directly instead, or run this on a desktop session.", file=sys.stderr)
+        return 1
+    App(root)
+    root.mainloop()
+    return 0
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except AlreadyRunning as exc:
-        print(str(exc), flush=True)
-    except KeyboardInterrupt:
-        print("\nSetup/local web servers stopped. MongoDB and data were not terminated or deleted.", flush=True)
-    except (RuntimeError, OSError, subprocess.CalledProcessError, ValueError) as exc:
-        if is_space_error(exc) and not isinstance(exc, DiskSpaceError):
-            exc = DiskSpaceError(space_message(ROOT, "local setup"))
-        print(f"\nSetup failed: {exc}\nSee docs/LOCAL_INSTALL.md for troubleshooting. No existing configuration or data was deleted.", file=sys.stderr)
-        raise SystemExit(1)
+    raise SystemExit(main())

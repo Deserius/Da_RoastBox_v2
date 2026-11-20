@@ -324,6 +324,41 @@ async def _apply_paid_purchase(user_id: str, session_id: str):
     )
 
 
+async def reconcile_pending_test_payments(max_age_hours: int = 24, limit: int = 50) -> int:
+    """Finalize checkouts Stripe already paid but that never got applied.
+
+    In local/dev use there is usually no public webhook endpoint for Stripe to
+    call back to, so a completed checkout only gets applied when the user is
+    still on the success page to trigger :func:`payment_status`. This sweep
+    catches the rest: anything left "pending" that Stripe's own API now
+    reports as paid. Bounded by age and count so it stays cheap; failures for
+    one transaction never stop the sweep. Returns how many were applied.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+    cursor = payments_collection.find(
+        {"payment_status": {"$nin": ["paid", "failed", "expired"]}, "created_at": {"$gte": cutoff}},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(limit)
+    applied = 0
+    try:
+        sc = _checkout()
+    except Exception:
+        return 0  # No usable Stripe key configured yet; nothing to reconcile.
+    async for txn in cursor:
+        session_id = txn.get("stripe_session_id")
+        user_id = txn.get("user_id")
+        if not session_id or not user_id:
+            continue
+        try:
+            status = await sc.get_checkout_status(session_id)
+            if (status.payment_status or "").lower() == "paid":
+                await _apply_paid_purchase(user_id, session_id)
+                applied += 1
+        except Exception:
+            log.warning("Could not reconcile pending payment %s", session_id, exc_info=True)
+    return applied
+
+
 @router.get("/status/{session_id}")
 async def payment_status(session_id: str, current_user: User = Depends(get_current_user)):
     txn = await payments_collection.find_one({"stripe_session_id": session_id})

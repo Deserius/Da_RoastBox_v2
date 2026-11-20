@@ -2,7 +2,7 @@
 
 A same-origin React + FastAPI + MongoDB + FFmpeg application. **Keep the existing scaffold:** no SQL migration, serverless rewrite, second frontend deployment or paid Render disk is required by this handoff.
 
-> **Prepared Windows download:** Extract **`Da_RoastBox_Windows_Preinstalled.zip`**, then double-click **`thelaunch.bat`** (`start.bat` also works). Real Windows runtimes, 50 installed application packages/FFmpeg and a compiled frontend are included; first-run dependency unpacking is **offline**, not pip/npm installation. It starts the local app and opens your registered default browser after readiness. Press **Enter/Space or tap** if the intro sound is blocked. Existing `.env`/data are preserved; real services still need private configuration. See [one-click instructions](docs/LOCAL_INSTALL.md) and [bundle details](docs/WINDOWS_BUNDLE.md).
+> **Run it locally:** extract the ZIP, then double-click **`RUN.bat`** (Windows) or run **`./run.sh`** (macOS/Linux) — same thing as `python server.py`. The first run creates a Python virtual environment and installs the backend packages; after that it starts instantly and opens your default browser. **No MongoDB, Node.js, or Yarn install is required** — the database is built in and the frontend ships prebuilt. Set your API keys (OpenAI, OpenRouter, ElevenLabs, Stripe, Google) any time with **`python install.py`**, a small window that verifies and saves each key straight into `backend/.env`. See [START_HERE.txt](START_HERE.txt) and [HOW_TO_RUN.md](HOW_TO_RUN.md).
 
 ## Start here
 
@@ -40,7 +40,8 @@ Browser → https://YOUR-ASSIGNED-SERVICE.onrender.com
 | Container start | `python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1` from `backend/` |
 | Frontend | `frontend/src/index.js` → `frontend/src/App.js`; `yarn build` |
 | Private configuration template | `deploy/render.env.example` — never commit the filled copy |
-| Windows/native entry | Double-click **`thelaunch.bat`** after Extract All; aliases `start.bat`, `LAUNCH_DA_ROASTBOX.bat`, `start.py` / `Launcher.py`; launcher 1.2.3 retains the 1.2.1 storage safeguards and preserves `.env`/data |
+| Local/native entry | `server.py` (Windows: double-click **`RUN.bat`**; macOS/Linux: `./run.sh`) — checks requirements, starts the server, opens the browser; preserves `.env`/data |
+| API key setup | `install.py` — desktop key manager, verifies and saves straight into `backend/.env` |
 
 The Docker build produces the frontend; FastAPI serves that build using `FRONTEND_BUILD_DIR`. The Render form does not need separate build/start commands when using Docker. Never run MongoDB in the Free web-service container.
 

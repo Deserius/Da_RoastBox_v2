@@ -12,8 +12,11 @@ def _flag(name: str) -> bool:
     return os.environ.get(name, "false").strip().lower() in ("1", "true", "yes")
 
 
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ["DB_NAME"]
+# "embedded" (the default) runs a built-in, zero-install database that needs no
+# MongoDB server at all. Set a real mongodb:// or mongodb+srv:// URL (e.g. a
+# free Atlas cluster) to use an actual MongoDB server instead. See db.py.
+MONGO_URL = os.environ.get("MONGO_URL", "embedded").strip() or "embedded"
+DB_NAME = os.environ.get("DB_NAME", "da_roastbox").strip() or "da_roastbox"
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 # Optional direct hosted OpenAI alternative; the original Emergent gateway takes precedence.
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")

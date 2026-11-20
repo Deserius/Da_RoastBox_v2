@@ -1,9 +1,135 @@
-"""MongoDB connection and collections."""
-from motor.motor_asyncio import AsyncIOMotorClient
+"""Database connection and collections.
+
+Da RoastBox needs no database server to be installed. By default
+(``MONGO_URL`` unset, blank, or ``embedded``) it runs against a built-in,
+zero-install database: a real MongoDB-compatible engine (mongomock) that
+lives in this process and is snapshotted to a single file under
+``backend/local_storage/`` so data survives restarts. Every route in this
+project talks to it through the exact same Motor-style async API it would
+use against a real server, so nothing else in the codebase needs to know
+the difference.
+
+Point ``MONGO_URL`` at a real ``mongodb://`` or ``mongodb+srv://`` connection
+string (for example a free MongoDB Atlas cluster, or a local `mongod`) to use
+a real MongoDB server instead — useful for multi-device sync or large
+datasets. That path is unchanged from before.
+"""
+from __future__ import annotations
+
+import atexit
+import logging
+import pickle
+import threading
+from pathlib import Path
+
 from config import MONGO_URL, DB_NAME
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+log = logging.getLogger(__name__)
+
+EMBEDDED_MODE = not MONGO_URL.strip().lower().startswith(("mongodb://", "mongodb+srv://"))
+
+_snapshot_lock = threading.Lock()
+_snapshot_path: "Path | None" = None
+_store = None  # mongomock DatabaseStore, only set in embedded mode
+
+if EMBEDDED_MODE:
+    from mongomock_motor import AsyncMongoMockClient
+
+    client = AsyncMongoMockClient()
+    db = client[DB_NAME]
+    _store = db.delegate._store  # mongomock.store.DatabaseStore (in-process, mutable)
+
+    ROOT_DIR = Path(__file__).resolve().parent
+    _snapshot_path = ROOT_DIR / "local_storage" / "roastbox_embedded_db.pkl"
+    _snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _load_snapshot() -> None:
+        if not _snapshot_path.exists():
+            return
+        try:
+            with open(_snapshot_path, "rb") as fh:
+                snapshot = pickle.load(fh)
+        except Exception:
+            log.exception(
+                "Could not read the local database file (%s); starting with an "
+                "empty database. The previous file is left in place in case it "
+                "can be recovered by hand.", _snapshot_path,
+            )
+            return
+        for name, docs in snapshot.items():
+            coll_store = _store[name]
+            coll_store.create()
+            for doc in docs:
+                coll_store._documents[doc["_id"]] = doc
+        log.info("Loaded local database from %s (%d collection(s))", _snapshot_path, len(snapshot))
+
+    def save_snapshot() -> None:
+        """Write every document to disk. Safe to call often; it is a plain file write."""
+        if _store is None:
+            return
+        with _snapshot_lock:
+            try:
+                snapshot = {
+                    name: list(_store[name]._documents.values())
+                    for name in _store.list_created_collection_names()
+                }
+                tmp_path = _snapshot_path.with_suffix(".tmp")
+                with open(tmp_path, "wb") as fh:
+                    pickle.dump(snapshot, fh, protocol=pickle.HIGHEST_PROTOCOL)
+                tmp_path.replace(_snapshot_path)
+            except Exception:
+                log.exception("Could not save the local database to %s", _snapshot_path)
+
+    _load_snapshot()
+    atexit.register(save_snapshot)
+
+else:
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+
+    def save_snapshot() -> None:  # pragma: no cover - no-op against a real server
+        pass
+
+
+_autosave_task = None
+
+
+async def start_autosave(interval_seconds: int = 20) -> None:
+    """Periodically flush the embedded database to disk. No-op for a real server."""
+    global _autosave_task
+    if not EMBEDDED_MODE or _autosave_task is not None:
+        return
+    import asyncio
+
+    async def _loop():
+        while True:
+            await asyncio.sleep(interval_seconds)
+            await asyncio.to_thread(save_snapshot)
+
+    _autosave_task = asyncio.create_task(_loop())
+
+
+async def stop_autosave() -> None:
+    import asyncio
+
+    global _autosave_task
+    if _autosave_task is not None:
+        _autosave_task.cancel()
+        try:
+            await _autosave_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        _autosave_task = None
+    await _flush_async()
+
+
+async def _flush_async() -> None:
+    import asyncio
+
+    await asyncio.to_thread(save_snapshot)
+
 
 users_collection = db["users"]
 sessions_collection = db["sessions"]

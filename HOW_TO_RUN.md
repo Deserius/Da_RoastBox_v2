@@ -1,22 +1,21 @@
 # Da RoastBox — how to download and run this project
 
-This archive is a **complete, standalone project** — the full source tree, every
-asset, the launchers and the tests. It is **not** a patch, and you do not apply
-it on top of anything.
+This is a **complete, standalone project** — the full source tree, every asset,
+the launcher and the tests. It is **not** a patch; you do not apply it on top
+of anything.
+
+The short version: extract the zip, run `python install.py` once to set your
+API keys, then double-click `RUN.bat` (or run `./run.sh`). That's it — no
+MongoDB, Node.js, or Yarn required.
 
 ---
 
-## 1. Get the zip
+## 1. Get the project
 
-**Option A — download from the workspace (fastest).**
-The archive is at the workspace root as:
-
-```
-da-roastbox-complete.zip      (14 MB, 557 files)
-```
-
-Download that file and unzip it anywhere. It extracts to a folder named
-`Da_RoastBox_v2/`.
+**Option A — download the zip (fastest).** Unzip it anywhere. It extracts to
+a folder named `Da_RoastBox_v2/`. Prefer a short local path, e.g.
+`C:\RoastBox` on Windows, and extract *all* files first — don't run anything
+from inside the ZIP viewer.
 
 **Option B — clone from GitHub instead.**
 
@@ -25,7 +24,7 @@ git clone -b arena/4d7ffea2-da-roastbox-v2 https://github.com/Deserius/Da_RoastB
 cd Da_RoastBox_v2
 ```
 
-Both give the same project. The zip has no `.git` history and no `node_modules`.
+Both give the same project.
 
 ---
 
@@ -33,172 +32,118 @@ Both give the same project. The zip has no `.git` history and no `node_modules`.
 
 | Requirement | Version | Why |
 |---|---|---|
-| Python | **3.11 or newer** (3.14 verified) | Backend (FastAPI) |
-| Node.js | 18+, ideally 20 or 22 LTS | Frontend (React) |
-| yarn | 1.22.x | Frontend install — npm produces a tree that will not build |
-| MongoDB | 6 or newer | Database — **required** |
-| ffmpeg | any recent | Highlight-reel export only (usually bundled) |
+| Python | **3.11, 3.12, 3.13, or 3.14** | Runs everything — backend, launcher, key setup |
 
-**On Windows 10?** See [`docs/WINDOWS_10.md`](docs/WINDOWS_10.md) — it covers the
-one real caveat (MongoDB does not officially support Windows 10) plus long paths,
-antivirus locks and the other Windows-specific traps.
+That's the whole list. Specifically, you do **not** need:
 
-Get MongoDB either with Docker:
+- **MongoDB** — the database is built in (`backend/db.py`), stores its data in
+  `backend/local_storage/`, and needs nothing installed or running. If you
+  specifically want a real MongoDB server (e.g. for multi-device sync), set
+  `MONGO_URL` in `backend/.env` to a real `mongodb://` or `mongodb+srv://`
+  connection string (a free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+  cluster works well) — everything else stays the same.
+- **Node.js / Yarn** — the frontend ships prebuilt (`frontend/build/`) and is
+  served by the same Python process as the API. You only need Node/Yarn if you
+  want to edit the frontend's *source* and rebuild it (see §8 below).
+- **ffmpeg** — only needed for highlight-reel (MP4) export; the app otherwise
+  works fine without it.
 
-```bash
-docker run -d -p 27017:27017 --name roastbox-mongo mongo:7
-```
-
-or a free **MongoDB Atlas** cluster (copy its connection string).
+**On Windows 10?** MongoDB isn't officially supported there — irrelevant now
+since you don't need MongoDB at all. See [`docs/WINDOWS_10.md`](docs/WINDOWS_10.md)
+for the remaining Windows-specific notes (long paths, antivirus locks).
 
 ---
 
-## 3. Install — one command
-
-**macOS / Linux**
+## 3. Set your API keys
 
 ```bash
-cd Da_RoastBox_v2
-./setup.sh
+python install.py          # Windows: python install.py  (or py install.py)
 ```
 
-**Windows** — double-click `setup.bat`, or in Command Prompt:
+This opens a small desktop window — one row per service (OpenAI, OpenRouter,
+ElevenLabs, Stripe secret key + webhook secret, Google OAuth client ID +
+secret). For each one:
 
-```bat
-cd Da_RoastBox_v2
-setup.bat
-```
+1. Paste the key.
+2. Click **Verify** — this makes one real, lightweight call to that provider
+   so you know immediately whether it works.
+3. Click **Save** — writes it straight into `backend/.env`, which stays on
+   your machine, is git-ignored, and persists across restarts and re-runs.
 
-`setup.sh` / `setup.bat` do these things:
-
-1. Create a `.venv` and install backend requirements.
-2. Remove two `@emergentbase/*` dev packages that point at `assets.emergent.sh`,
-   a host that no longer exists. *(The bundled `install.sh` runs
-   `yarn install --frozen-lockfile`, which fails on exactly those two. They only
-   provide the Emergent dev overlay and visual editor — `craco.config.js`
-   already loads them defensively and logs "overlay disabled" when absent, so
-   nothing else changes.)*
-3. If your network cannot reach `registry.yarnpkg.com`, rewrite the lockfile
-   hosts to `registry.npmjs.org` for the duration of the install.
-4. Install frontend dependencies with `yarn install` (yarn is required — see
-   "Why yarn, not npm" below).
-5. Generate `backend/.env` with a random `JWT_SECRET` and working local defaults.
-6. Print the run commands, and warn if no database is listening on port 27017.
-
-If you would rather do it by hand:
-
-```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r backend/requirements.txt
-
-cd frontend
-python ../scripts/prepare_package_json.py package.json   # drops the 2 dead devDeps
-cp yarn.lock yarn.lock.bak
-python ../scripts/fix_lockfile_registry.py yarn.lock      # optional: registry swap
-yarn install --ignore-engines
-mv -f yarn.lock.bak yarn.lock
-# restore package.json from your backup when done
-cd ..
-
-cp backend/.env.example backend/.env
-# then edit backend/.env: set MONGO_URL, DB_NAME, JWT_SECRET
-```
-
-### Why yarn, not npm
-
-`frontend/package.json` pins 46 transitive versions through yarn's `resolutions`
-field, and `yarn.lock` records 1457 exact tarball URLs. npm ignores `resolutions`
-and hoists differently, producing a tree that **will not build**: ajv 6 lands
-where `ajv-keywords@5` requires ajv 8, and `craco build` dies with
-`MODULE_NOT_FOUND` inside `terser-webpack-plugin`. This is not an app bug; it is
-npm resolving a different graph. Install yarn if you do not have it:
-
-```bash
-npm install -g yarn
-```
+It needs nothing beyond a stock Python install (just the standard library +
+Tkinter), so you can run it before setting up anything else. You can also
+skip this step and come back to it later — the app runs in a local demo mode
+without any keys — or use the in-app Settings console instead (passphrase
+below) once the server is running.
 
 ---
 
 ## 4. Run it
 
-**Easiest — one click.** Double-click **`RUN.bat`** (Windows) or run **`./run.sh`**.
-It checks Python, packages, `.env`, the port and the database, fixes what it can,
-starts the API and the frontend, and opens your default browser.
+**Windows:** double-click **`RUN.bat`**.
+**macOS / Linux:** run **`./run.sh`**.
 
-It prints a specific message instead of a traceback if something is missing:
+The first run creates a `.venv` virtual environment and installs the backend's
+Python packages (a couple of minutes). Every run after that starts in a few
+seconds. Either script is equivalent to:
+
+```bash
+python server.py
+```
+
+`server.py` checks what it needs, fixes what it safely can, starts the server,
+and opens the app in your default browser. It prints a specific message
+instead of a traceback if something is missing:
 
 ```
-  [ok]   Python 3.11.2
-  [ok]   All 11 required packages import
+  [ok]   Python 3.13.2
+  [ok]   All 13 required packages import
   [ok]   backend/.env found
   [ok]   JWT_SECRET present
   [ok]   Port 8001 is free
-  [ok]   MongoDB is reachable on 127.0.0.1:27017
+  [ok]   Database: built-in, no installation needed (backend/local_storage/)
+  [ok]   Frontend: serving prebuilt frontend/build from this same server
 ```
 
-Diagnose without starting anything: `cd backend && ..\.venv\Scripts\python run_server.py --check`
+Useful flags (pass them to `RUN.bat`, `run.sh`, or `python server.py` directly):
 
-**Or start it by hand** — two terminals.
-
-**Terminal 1 — backend**
-
-```bash
-cd Da_RoastBox_v2
-. .venv/bin/activate
-cd backend
-uvicorn server:app --reload --port 8001
-```
-
-Windows: `..\.venv\Scripts\uvicorn server:app --reload --port 8001`
-
-**Terminal 2 — frontend**
-
-```bash
-cd Da_RoastBox_v2/frontend
-npm start
-```
-
-Open **http://localhost:3000**.
-
-The frontend proxies `/api` to the backend on port `8001` automatically
-(`API_PROXY_TARGET` in `frontend/.env`), so nothing else needs configuring.
-
-**One-shot (macOS/Linux):** `./setup.sh --run` installs and starts both.
-**One-shot (Windows):** `setup.bat run`
+| Flag | What it does |
+|---|---|
+| `--check` | Diagnose only; starts nothing |
+| `--fix` | Regenerate `backend/.env` if it's missing/broken, then start |
+| `--port 8002` | Use a different port |
+| `--no-browser` | Don't open a browser automatically |
+| `--dev` | Use the Node/Yarn frontend dev server on :3000 instead of the prebuilt build (for editing frontend source) |
 
 ---
 
 ## 5. First-run checklist
 
-1. Click **"Browse as guest"** on the sign-in screen — unlimited credits.
-2. Go to **Settings → Connect your services**.
-3. Enter the console passphrase: **`roastbox`**
-4. Paste your keys: **OpenRouter**, **OpenAI**, **ElevenLabs**, **Stripe**
-   (secret key + webhook secret), **Google** (client ID + secret).
-5. Click **Verify & save**. Keys are validated, stored encrypted, and written to
-   `backend/.env` (gitignored).
-
-> **Change both secrets before exposing this publicly:**
-> `RUNTIME_SETTINGS_PASSPHRASE` (console passphrase) and `JWT_SECRET`, in
-> `backend/.env`.
+1. Click **"Browse as guest"** on the sign-in screen — unlimited credits in
+   preview mode.
+2. If you haven't already run `install.py`, open **Settings** in the app and
+   enter the console passphrase: **`roastbox`**. From there you can paste and
+   verify the same keys `install.py` manages.
+3. Once you've added a real OpenRouter or OpenAI key, turn off demo mode (see
+   §6) to get live AI-written shows and real speech.
 
 ---
 
 ## 6. About `ROASTBOX_DRY_RUN`
 
-`setup.sh` writes `ROASTBOX_DRY_RUN=true`. In that mode, roast scripts and audio
-are generated by a local stand-in so the whole app works **with no internet and
-no API keys** — useful for checking the UI, cast, timing, credits and playback.
+`backend/.env` is generated with `ROASTBOX_DRY_RUN=true`. In that mode, roast
+scripts and audio are generated by a local stand-in, so the whole app works
+**with no internet and no API keys** — useful for checking the UI, cast,
+timing, credits and playback. The audio in this mode is a quiet tone, not
+speech, and the jokes are generic filler.
 
-The audio in this mode is a quiet tone, not speech, and the jokes are generic
-filler. **Set it to `false` once you've added a real OpenRouter or OpenAI key**
-so live AI is used:
+Set it to `false` once you've added a real key, in `backend/.env`:
 
 ```ini
 ROASTBOX_DRY_RUN=false
 ```
 
-Then restart the backend.
+Then restart the server.
 
 ---
 
@@ -206,14 +151,14 @@ Then restart the backend.
 
 ```bash
 cd backend
-python scripts/test_pipeline_port.py     # 42 checks, no network needed
-python scripts/test_byok_generation.py   # proves generation end to end
-python scripts/test_settings_console.py  # settings console + key persistence
+..\.venv\Scripts\python scripts/test_pipeline_port.py     (Windows)
+../.venv/bin/python scripts/test_pipeline_port.py          (macOS/Linux)
 ```
 
-Related suites: `test_rap_battle.py`, `test_lineup_roasts.py`,
-`test_roast_showrunner.py`, `test_preview_limits.py`, `test_voice_first_mix.py`,
-`test_voice_leveling.py`, `test_key_persistence.py`.
+Related suites, same pattern: `test_byok_generation.py`, `test_settings_console.py`,
+`test_rap_battle.py`, `test_lineup_roasts.py`, `test_roast_showrunner.py`,
+`test_preview_limits.py`, `test_voice_first_mix.py`, `test_voice_leveling.py`,
+`test_key_persistence.py`, `test_stripe_direct.py`.
 
 You can also run the original pytest suites in `backend/tests/`:
 
@@ -224,19 +169,28 @@ python -m pytest backend/tests -q
 
 ---
 
-## 8. Optional: production build
+## 8. Optional: editing the frontend source
+
+The app runs entirely from the prebuilt `frontend/build/` folder — you don't
+need this section unless you want to change the frontend's React source and
+see your changes. That still needs Node.js and Yarn (the repo's dependency
+tree is yarn-only; npm will not build it — see `setup.sh`/`setup.bat` for
+why). Once you have them:
 
 ```bash
 cd frontend
-CI=false npm run build      # emits frontend/build/
+yarn install --ignore-engines
+yarn start            # dev server on :3000, auto-reloads on save
+# when you're happy with your changes:
+CI=false yarn build    # writes the new frontend/build/
 ```
 
-The backend serves `frontend/build/` automatically when present, so a single
-`uvicorn` process can host the whole app.
+`setup.sh` / `setup.bat` automate the Yarn install (including a couple of
+known Windows/registry workarounds); run them only if you're doing frontend
+development. `RUN.bat` / `run.sh` do **not** need them.
 
-For Render, `render.yaml` and `deploy/` are included. Set `APP_ENV=production`
-and provide real secrets via environment variables — the release guard refuses
-preview logins, dry-run mode and the runtime settings console in production.
+For Render or another always-on host, `render.yaml` and `deploy/` are
+included; see `docs/RENDER_DEPLOYMENT.md`.
 
 ---
 
@@ -244,15 +198,13 @@ preview logins, dry-run mode and the runtime settings console in production.
 
 | Symptom | Cause and fix |
 |---|---|
-| `ModuleNotFoundError: No module named 'emergentintegrations'` | Fixed in this build — payments now call Stripe directly. If you see it, you are on an older download: update `backend/services/stripe_checkout.py` and `backend/routes/payments.py`. |
+| "Refusing to start: MONGO_URL points at localhost but nothing is listening" | `backend/.env` was pointed at a real local MongoDB that isn't running. Set `MONGO_URL=embedded` in `backend/.env` to go back to the built-in database (no install needed), or start that MongoDB. |
+| `ModuleNotFoundError: No module named 'emergentintegrations'` | You're on an old download. This build calls Stripe directly — update to the current `backend/services/stripe_checkout.py`. |
 | `ModuleNotFoundError` for anything else | A package is missing: `cd backend && ..\.venv\Scripts\python -m pip install -r requirements.txt` |
-| `ENOENT` / `getaddrinfo assets.emergent.sh` during install | `install.sh`/`install.bat` ran instead of `setup.sh`/`setup.bat`. Use the setup scripts, or delete the two `@emergentbase/*` devDependencies lines from `frontend/package.json` first. |
-| `yarn install` fails: "Client network socket disconnected before secure TLS connection was established" | Your network cannot reach `registry.yarnpkg.com`. The setup scripts rewrite the lockfile to `registry.npmjs.org` automatically; if you install by hand, run `python scripts/fix_lockfile_registry.py frontend/yarn.lock`. |
-| `MODULE_NOT_FOUND` in `terser-webpack-plugin` / `ajv-keywords` | The frontend was installed with **npm**. npm ignores the repo's yarn-only `resolutions` field and resolves a tree that will not build. Delete `frontend/node_modules` and reinstall with yarn. |
-| `KeyError: 'MONGO_URL'` on startup | `backend/.env` is missing or lacks `MONGO_URL`. Copy `backend/.env.example` and set it. |
-| Backend starts but pages 404 | Frontend dev server not running, or `API_PROXY_TARGET` is not `http://127.0.0.1:8001`. |
-| `pymongo.errors.ServerSelectionTimeoutError` | MongoDB is not running. Start the container or point `MONGO_URL` at Atlas. |
-| Roasts fail with a connection error | No reachable provider. Add a real key and set `ROASTBOX_DRY_RUN=false`, or keep dry-run on to demo offline. |
+| A key you saved keeps getting rejected | Re-run `python install.py`, click Verify on that row — it tells you exactly what the provider said. If Verify passes but the app still complains, check `backend/.env` doesn't have the same key set twice. |
+| `KeyError: 'JWT_SECRET'` or similar on startup | `backend/.env` is missing or incomplete. Run `python server.py --fix`, or `python install.py` (it creates `.env` automatically). |
+| Backend starts but the page is blank/404 | `frontend/build/index.html` is missing. Either use the download as-is (it ships prebuilt), or see §8 to build it. |
+| Roasts fail with a connection error | No reachable AI provider. Add a real key with `install.py` and set `ROASTBOX_DRY_RUN=false`, or keep dry-run on to demo offline. |
 | Reel/MP4 export fails | `ffmpeg` is not installed or not on `PATH`. |
 | "This panel is limited to specific operator accounts" | `RUNTIME_SETTINGS_ADMINS` is set in `backend/.env`; remove it or add your email. |
 
@@ -261,25 +213,26 @@ preview logins, dry-run mode and the runtime settings console in production.
 ## 10. Project layout
 
 ```
-RUN.bat / run.sh    one-click launcher: checks, fixes, starts, opens the browser
+server.py            double-click entry point: checks, fixes, starts, opens the browser
+install.py           desktop API key manager -> writes straight into backend/.env
+RUN.bat / run.sh      thin Windows/Unix wrappers around server.py (create .venv on first run)
 backend/
-  run_server.py     the launcher behind RUN.bat (diagnoses, then serves)
-  services/stripe_checkout.py   Stripe via the official SDK, no vendor wrapper
-backend/            FastAPI app
-  routes/           13 routers (roast, auth, payments, settings, …)
-  services/         pipeline: roast_writer, voice_orchestrator, dry_run, …
-  data/personas.json 40 roasters
-  assets/           sfx, fonts, persona portraits
-  scripts/          offline test suites
-  tests/            pytest suites
-frontend/           React 19 + CRA/CRACO + Tailwind
-  src/              pages, components, hooks, theater
-  public/assets/    crowd SFX, intro stings, about-author media
-  .env              committed, secret-free (proxy + preview flags)
-docs/               design and deployment notes
-scripts/            operator utilities
-deploy/             Render/Heroku configs
-setup.sh/.bat       local setup (use these)
-install.sh/.bat     original Emergent installer (needs assets.emergent.sh)
-HOW_TO_RUN.md       this file
+  server.py           the FastAPI app (ASGI "server:app")
+  run_server.py       the launcher behind server.py (diagnoses, then serves)
+  db.py               built-in database (embedded mode) + real-MongoDB fallback
+  routes/             routers (roast, auth, payments, settings, …)
+  services/           pipeline: roast_writer, voice_orchestrator, stripe_checkout, …
+  data/personas.json  40 roasters
+  assets/             sfx, fonts, persona portraits
+  local_storage/       built-in database file + local media (gitignored)
+  scripts/            offline test suites
+  tests/              pytest suites
+frontend/
+  build/              prebuilt static site - this is what actually runs
+  src/                React source (only needed if you edit the frontend)
+docs/                 design and deployment notes
+scripts/              shared setup/operator utilities
+deploy/               Render/Heroku configs
+setup.sh / setup.bat  optional: Node/Yarn frontend-dev setup (not needed to run the app)
+HOW_TO_RUN.md         this file
 ```

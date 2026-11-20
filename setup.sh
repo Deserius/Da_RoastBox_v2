@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Da RoastBox — one-command local setup (macOS / Linux). Windows uses setup.bat.
+# Da RoastBox — OPTIONAL frontend developer setup (macOS / Linux). Windows: setup.bat.
 #
-# Why this script exists
-#   The bundled `install.sh` runs `yarn install --frozen-lockfile`, which fails:
+# You do NOT need this script to run the app. run.sh / server.py serve the
+# prebuilt frontend/build folder directly - no Node.js or Yarn required. Run
+# this only if you want to edit the frontend's React source and rebuild it.
+#
+# Why this script does its own thing instead of a plain "yarn install"
+#   A plain `yarn install --frozen-lockfile` always fails here:
 #   frontend/package.json pins two @emergentbase dev packages to tarballs on
 #   assets.emergent.sh, a host that no longer resolves. Those packages only
 #   provide the Emergent dev overlay and visual editor, and craco.config.js

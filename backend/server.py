@@ -14,7 +14,8 @@ import config
 from runtime_security import enforce_runtime, RequestSecurityMiddleware
 
 RUNTIME_SECURITY = enforce_runtime(os.environ)
-from db import ensure_indexes, roasts_collection, voice_previews_collection, voice_preview_samples_collection
+from db import (ensure_indexes, roasts_collection, voice_previews_collection, voice_preview_samples_collection,
+                 start_autosave, stop_autosave)
 from auth_deps import get_optional_user
 from models import User
 from services.voice_orchestrator import prune_audio_cache
@@ -126,6 +127,7 @@ async def _payment_recovery_loop():
 async def _startup():
     global _generation_recovery_task, _payment_recovery_task
     await ensure_indexes()
+    await start_autosave()
     # Load any console-entered credentials so synchronous provider paths see
     # them on the very first request rather than after the first write.
     await runtime_settings_service.hydrate()
@@ -156,3 +158,4 @@ async def _shutdown():
             await _generation_recovery_task
         except asyncio.CancelledError:
             pass
+    await stop_autosave()
