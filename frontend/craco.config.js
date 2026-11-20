@@ -114,8 +114,10 @@ let webpackConfig = {
       '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig) => {
-      // Change the development bundle URL once to evict older proxy-cached JS.
-      if (isDevServer) webpackConfig.output.filename = "static/js/bundle-workspace-v5.js";
+      // Versioned on purpose: a fixed bundle name is cached hard by browsers and
+      // proxies, which silently serves stale code after a change. Bump this
+      // whenever the shell must be re-fetched.
+      if (isDevServer) webpackConfig.output.filename = "static/js/bundle-workspace-v6.js";
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {

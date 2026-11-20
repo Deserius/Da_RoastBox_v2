@@ -101,6 +101,7 @@ export default function ProviderConsole() {
   const [state, setState] = useState(null);
   const [stateError, setStateError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
+  const [gate, setGate] = useState(null); // "disabled" | "not-preview" | null
   const [passphrase, setPassphrase] = useState("");
   const [drafts, setDrafts] = useState({});
   const [results, setResults] = useState({});
@@ -123,8 +124,20 @@ export default function ProviderConsole() {
         } catch { /* cosmetic only */ }
       }
     } catch (e) {
-      if (e?.response?.status === 404) setUnavailable(true);
-      else setStateError(e?.response?.data?.detail || "Could not load the settings console.");
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail || "";
+      if (status === 404) {
+        setUnavailable(true);
+        setGate("disabled");
+      } else if (status === 403) {
+        // Signed in, but not with a disposable preview account.
+        setGate("not-preview");
+        setStateError("");
+        setUnavailable(false);
+        setState({ enabled: true, unlocked: false });
+      } else {
+        setStateError(detail || "Could not load the settings console.");
+      }
     }
   }, []);
 
@@ -226,6 +239,23 @@ export default function ProviderConsole() {
       toast(e?.response?.data?.detail || "Could not clear", "error");
     } finally { setBusy(false); }
   };
+
+  if (gate === "not-preview" && !state?.unlocked) {
+    return (
+      <div data-testid="provider-console-gated">
+        <h2>Connect your services</h2>
+        <p className="text-muted" style={{ fontSize: 13 }}>
+          This panel accepts live API keys, so it is restricted to the
+          <strong> disposable preview account</strong>. You are currently signed in
+          with a different account.
+        </p>
+        <p className="text-muted" style={{ fontSize: 13 }}>
+          To configure keys: sign out, then choose <strong>Browse as guest</strong> on
+          the sign-in screen. That account has unlimited credits and can open this panel.
+        </p>
+      </div>
+    );
+  }
 
   if (unavailable) {
     return (
@@ -344,7 +374,10 @@ export default function ProviderConsole() {
 
       {state && !unlocked && (
         <form onSubmit={unlock} style={{ marginTop: 12 }}>
-          <p className="text-muted" style={{ fontSize: 13 }}>Enter the console passphrase to unlock.</p>
+          <p className="text-muted" style={{ fontSize: 13 }}>
+            Enter the console passphrase to unlock. On this preview workspace the
+            passphrase is <code data-testid="console-passphrase-hint">roastbox</code>.
+          </p>
           <input
             className="input" type="password" placeholder="Console passphrase"
             value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
