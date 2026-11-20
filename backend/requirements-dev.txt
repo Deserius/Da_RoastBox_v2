@@ -1,0 +1,6 @@
+# Offline tests and release checks only; not installed in the runtime container.
+-r requirements-runtime.txt
+PyYAML==6.0.3
+jsonschema==4.26.0
+pytest==9.2.0
+detect-secrets==1.5.0
