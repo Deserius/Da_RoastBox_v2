@@ -17,14 +17,20 @@ from pymongo.errors import DuplicateKeyError
 from db import users_collection, sessions_collection
 from models import User
 from auth_deps import get_current_user, validate_cookie_origin
-from config import ALLOW_DEV_LOGIN, ENABLE_PREVIEW_LOGIN, PREVIEW_UNLIMITED_CREDITS
+from config import (ALLOW_DEV_LOGIN, ENABLE_PREVIEW_LOGIN, PREVIEW_UNLIMITED_CREDITS,
+                    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_AUTH_URL, GOOGLE_SESSION_URL)
 from services.app_sessions import issue_app_session
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+from services.runtime_settings import secret_cached, setting_cached
+
+
+def _session_url() -> str:
+    """Session-exchange endpoint. Console override first, then config default."""
+    return setting_cached("GOOGLE_SESSION_URL", GOOGLE_SESSION_URL)
 
 
 class SessionRequest(BaseModel):
@@ -37,7 +43,7 @@ async def create_session(body: SessionRequest, response: Response):
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             r = await client.get(
-                EMERGENT_AUTH_URL,
+                _session_url(),
                 headers={"X-Session-ID": body.session_id},
             )
         except httpx.RequestError:

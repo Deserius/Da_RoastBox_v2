@@ -46,10 +46,12 @@ def _explicit_env(key: str) -> bool:
 
 # field key -> human label. Order drives the console UI.
 SECRET_FIELDS: Tuple[Tuple[str, str], ...] = (
-    ("OPENAI_API_KEY", "OpenAI API key"),
     ("OPENROUTER_API_KEY", "OpenRouter API key"),
+    ("OPENAI_API_KEY", "OpenAI API key"),
     ("ELEVENLABS_API_KEY", "ElevenLabs API key"),
     ("EMERGENT_LLM_KEY", "Emergent LLM gateway key"),
+    ("GOOGLE_CLIENT_ID", "Google OAuth client ID"),
+    ("GOOGLE_CLIENT_SECRET", "Google OAuth client secret"),
     ("STRIPE_API_KEY", "Stripe secret key"),
     ("STRIPE_WEBHOOK_SECRET", "Stripe webhook signing secret"),
     ("BLOB_READ_WRITE_TOKEN", "Vercel Blob read/write token"),
@@ -58,11 +60,18 @@ SECRET_FIELDS: Tuple[Tuple[str, str], ...] = (
 SECRET_KEYS = tuple(key for key, _ in SECRET_FIELDS)
 _FIELD_LABELS = dict(SECRET_FIELDS)
 
-# Non-secret switches an operator may flip from the console.
+# Non-secret switches and model choices an operator may set from the console.
 SETTING_FIELDS: Tuple[Tuple[str, str], ...] = (
     ("AI_DEFAULT_PROVIDER", "AI provider (openai | emergent)"),
     ("ROAST_WRITER_PROVIDER", "Writer provider (openrouter | existing)"),
     ("STORAGE_BACKEND", "Media storage (emergent | local | vercel_blob)"),
+    ("ROAST_WRITER_PROFILE", "Writer profile (free | creative | multimodal)"),
+    ("ROAST_FREE_PREMIUM_MODEL", "Premium shows - free model"),
+    ("ROAST_FREE_BACKUP_MODEL", "Premium shows - free backup model"),
+    ("ROAST_WRITER_MODEL", "Standard shows - free model"),
+    ("ROAST_PAID_PRIMARY_MODEL", "Premium shows - paid model (creative profile)"),
+    ("ROAST_PAID_STANDARD_MODEL", "Standard shows - paid model (creative profile)"),
+    ("ROAST_PAID_BACKUP_MODEL", "Paid backup model"),
 )
 SETTING_KEYS = tuple(key for key, _ in SETTING_FIELDS)
 
@@ -70,6 +79,7 @@ _ALLOWED: Dict[str, Tuple[str, ...]] = {
     "AI_DEFAULT_PROVIDER": ("openai", "emergent"),
     "ROAST_WRITER_PROVIDER": ("openrouter", "existing"),
     "STORAGE_BACKEND": ("emergent", "local", "vercel_blob"),
+    "ROAST_WRITER_PROFILE": ("free", "creative", "multimodal"),
 }
 
 _DOC_ID = "provider_credentials"
@@ -149,11 +159,18 @@ def secret_cached(key: str) -> str:
 
 
 def setting_cached(key: str, default: Optional[str] = None) -> Optional[str]:
-    """Synchronous counterpart to :func:`setting`."""
-    env_value = _env(key)
-    if isinstance(env_value, str) and env_value.strip():
-        return env_value.strip().lower()
-    return _cache["setting"].get(key, default)
+    """Synchronous counterpart to :func:`setting`.
+
+    ``default`` is the caller's module-level constant, which already carries the
+    deploy-time value. Preferring it over re-reading config keeps these lookups
+    patchable (tests replace the module constant) and means an explicitly
+    exported variable still wins, because ``save`` refuses to store an override
+    for a key the environment already declares.
+    """
+    stored = _cache["setting"].get(key)
+    if stored is not None:
+        return stored
+    return default
 
 
 async def hydrate() -> None:
@@ -243,9 +260,15 @@ async def save(payload: Dict[str, Optional[str]]) -> List[str]:
         if not value:
             update[key] = None
             continue
-        if value not in _ALLOWED.get(key, ()):
-            problem = f"{key} must be one of {', '.join(_ALLOWED.get(key, ()))}."
+        allowed = _ALLOWED.get(key)
+        if allowed is not None and value not in allowed:
+            problem = f"{key} must be one of {', '.join(allowed)}."
             continue
+        if allowed is None:
+            # Only model IDs reach here, and "vendor/model" is the universal shape.
+            if " " in value or "/" not in value:
+                problem = f"{key} must look like 'vendor/model' with no spaces."
+                continue
         if _explicit_env(key):
             problem = f"{key} is set by the environment and takes precedence."
             continue

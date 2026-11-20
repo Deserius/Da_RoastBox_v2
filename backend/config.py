@@ -139,6 +139,17 @@ PREVIEW_HOSTED_DAILY_VOICE_LIMIT = int(os.environ.get("PREVIEW_HOSTED_DAILY_VOIC
 # Preview accounts cannot buy credits, so this removes the credit requirement
 # (and the debit) for them. Off by default for any deployment that bills users.
 PREVIEW_UNLIMITED_CREDITS = _flag("PREVIEW_UNLIMITED_CREDITS")
+# Google sign-in. The original build delegates OAuth to a managed provider URL
+# (see routes/auth.py). Supplying a pair of Google OAuth client credentials lets
+# an operator point the app at their own consent screen instead.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+# Managed provider endpoints (default). Override to use a self-hosted broker.
+GOOGLE_AUTH_URL = (os.environ.get("GOOGLE_AUTH_URL")
+                   or "https://demobackend.emergentagent.com/auth/v1/env/oauth").strip()
+GOOGLE_SESSION_URL = (os.environ.get("GOOGLE_SESSION_URL")
+                      or "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data").strip()
+
 # Owner settings console: lets an operator enter provider credentials from the
 # running app instead of hand-editing the environment. Intended for a disposable
 # preview only; it always requires a shared passphrase and is never on by default.

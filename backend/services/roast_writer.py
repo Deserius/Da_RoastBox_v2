@@ -660,21 +660,30 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
         log.warning("OpenRouter writer selected without an OpenRouter key; using the existing provider")
     if writer_provider == "openrouter" and openrouter_key:
         # The explicit creative profile cannot bypass the free-only spending guard.
-        if ROAST_WRITER_PROFILE == "creative" and ROAST_FREE_WRITER_ONLY:
+        if setting_cached("ROAST_WRITER_PROFILE", ROAST_WRITER_PROFILE) == "creative" and ROAST_FREE_WRITER_ONLY:
             raise RuntimeError("Creative profile requires free-only mode to be disabled")
         premium = roast_tier == "premium"
-        if ROAST_WRITER_PROFILE == "creative":
+        # Model IDs resolve through the settings console first, so an operator can
+        # pick which model runs free vs premium shows without editing the environment.
+        profile = setting_cached("ROAST_WRITER_PROFILE", ROAST_WRITER_PROFILE)
+        free_premium = setting_cached("ROAST_FREE_PREMIUM_MODEL", ROAST_FREE_PREMIUM_MODEL)
+        free_backup = setting_cached("ROAST_FREE_BACKUP_MODEL", ROAST_FREE_BACKUP_MODEL)
+        free_standard = setting_cached("ROAST_WRITER_MODEL", ROAST_WRITER_MODEL)
+        paid_primary = setting_cached("ROAST_PAID_PRIMARY_MODEL", ROAST_PAID_PRIMARY_MODEL)
+        paid_standard = setting_cached("ROAST_PAID_STANDARD_MODEL", ROAST_PAID_STANDARD_MODEL)
+        paid_backup = setting_cached("ROAST_PAID_BACKUP_MODEL", ROAST_PAID_BACKUP_MODEL)
+        if profile == "creative":
             # Premium shows buy the strongest configured creative model; standard
             # shows use the cheaper mid-tier model rather than losing the craft.
-            primary = ROAST_PAID_PRIMARY_MODEL if premium else ROAST_PAID_STANDARD_MODEL
-            backup = ROAST_PAID_BACKUP_MODEL
+            primary = paid_primary if premium else paid_standard
+            backup = paid_backup
             if backup and backup == primary:
-                backup = ROAST_PAID_STANDARD_MODEL if premium else ROAST_PAID_PRIMARY_MODEL
+                backup = paid_standard if premium else paid_primary
         else:
-            primary = ROAST_FREE_PREMIUM_MODEL if premium else ROAST_WRITER_MODEL
-            backup = ROAST_FREE_BACKUP_MODEL
+            primary = free_premium if premium else free_standard
+            backup = free_backup
             if backup and backup == primary:
-                backup = ROAST_WRITER_MODEL if premium else ROAST_FREE_PREMIUM_MODEL
+                backup = free_standard if premium else free_premium
         if ROAST_FREE_WRITER_ONLY and any(not m.endswith(":free") for m in (primary, backup) if m):
             raise RuntimeError("Free-only writer requires :free OpenRouter model IDs")
         try:

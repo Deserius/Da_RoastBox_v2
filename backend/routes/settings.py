@@ -26,7 +26,7 @@ from config import (ALLOW_RUNTIME_SETTINGS, PREVIEW_UNLIMITED_CREDITS,
                     RUNTIME_SETTINGS_ADMINS, RUNTIME_SETTINGS_PASSPHRASE)
 from db import users_collection
 from models import User
-from services import runtime_settings
+from services import env_writer, key_validator, runtime_settings
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +84,10 @@ class UnlockBody(BaseModel):
 class SaveBody(BaseModel):
     api_key: Optional[str] = None
     keys: Optional[dict] = None
+    # Two-phase save: validate first, then persist only what the operator
+    # explicitly confirmed. "validate" never writes.
+    mode: str = "apply"          # "validate" | "apply"
+    persist_env: bool = True     # also write backend/.env after validation
 
 
 @router.get("/console")
@@ -136,24 +140,123 @@ async def lock_console(current_user: User = Depends(get_current_user)):
     return {"unlocked": False}
 
 
-@router.put("/console")
-async def save_console(body: SaveBody, current_user: User = Depends(get_current_user)):
-    """Save supplied credentials. Blank values clear a console-stored value."""
+async def _validate_payload(payload: dict) -> dict:
+    """Check every supplied secret before anything is stored."""
+    submitted = {k: str(v) for k, v in payload.items()
+                 if k in runtime_settings.SECRET_KEYS and str(v).strip()}
+    if not submitted:
+        return {}
+    return await key_validator.validate_many(submitted)
+
+
+@router.post("/console/validate")
+async def validate_console(body: SaveBody, current_user: User = Depends(get_current_user)):
+    """Dry run: report whether each submitted key works. Writes nothing."""
     await _require_operator(current_user)
     payload = dict(body.keys or {})
     if body.api_key is not None:
         payload.setdefault("OPENAI_API_KEY", body.api_key)
     if not payload:
         raise HTTPException(status_code=400, detail="No settings provided")
+    results = await _validate_payload(payload)
+    blocked = sorted(k for k, r in results.items() if key_validator.blocking_status(r["status"]))
+    return {
+        "status": "invalid" if blocked else "ok",
+        "results": results,
+        "rejected": blocked,
+    }
+
+
+@router.put("/console")
+async def save_console(body: SaveBody, current_user: User = Depends(get_current_user)):
+    """Save supplied credentials. Blank values clear a console-stored value.
+
+    In ``validate`` mode nothing is written; the caller gets the provider verdict
+    for each key. In ``apply`` mode a key is only persisted once the provider has
+    accepted it (or could not be reached at all, which cannot be helped offline).
+    """
+    await _require_operator(current_user)
+    payload = dict(body.keys or {})
+    if body.api_key is not None:
+        payload.setdefault("OPENAI_API_KEY", body.api_key)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No settings provided")
+
+    validation = await _validate_payload(payload)
+    if body.mode == "validate":
+        blocked = sorted(k for k, r in validation.items() if key_validator.blocking_status(r["status"]))
+        return {"status": "invalid" if blocked else "ok", "results": validation, "rejected": blocked}
+
+    rejected = [k for k, r in validation.items() if key_validator.blocking_status(r["status"])]
+    if rejected:
+        raise HTTPException(status_code=422, detail={
+            "message": "The provider rejected these credentials; nothing was saved.",
+            "rejected": rejected,
+            "results": validation,
+        })
+
     try:
         changed = await runtime_settings.save(payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     if not changed:
         raise HTTPException(status_code=400, detail="Nothing was saved. Environment values take precedence.")
+
+    # Mirror into backend/.env so the values survive a process restart, and make
+    # sure that file can never be committed.
+    env_written, env_ignored, env_error = [], None, None
+    if body.persist_env:
+        # Secrets and switches both persist; a model choice is configuration, not
+        # a credential, but it still has to survive a restart.
+        persistable = set(runtime_settings.SECRET_KEYS) | set(runtime_settings.SETTING_KEYS)
+        to_write = {k: str(v).strip() for k, v in payload.items()
+                    if k in persistable and str(v).strip()}
+        if to_write:
+            try:
+                env_ignored = env_writer.ensure_gitignored()
+                env_written = env_writer.write_values(to_write)
+            except env_writer.EnvWriteError as exc:
+                # The in-memory/DB save already succeeded, so report rather than fail.
+                env_error = str(exc)
+                log.warning("Could not persist credentials to .env: %s", exc)
+
     log.info("Runtime settings updated: %s", ", ".join(changed))
     snapshot = await runtime_settings.effective_snapshot()
-    return {"status": "ok", "changed": changed, **snapshot}
+    return {
+        "status": "ok",
+        "changed": changed,
+        "validation": validation,
+        "env_written": env_written,
+        "env_file": env_writer.SECRETS_FILE_LABEL,
+        "env_ignored": env_ignored,
+        "env_error": env_error,
+        **snapshot,
+    }
+
+
+@router.get("/auth-status")
+async def auth_status(current_user: User = Depends(get_current_user)):
+    """Non-secret Google sign-in state for the console."""
+    await _require_operator(current_user)
+    return {
+        "google_client_id": await runtime_settings.secret("GOOGLE_CLIENT_ID") or "",
+        "google_configured": bool(await runtime_settings.secret("GOOGLE_CLIENT_ID")
+                                  and await runtime_settings.secret("GOOGLE_CLIENT_SECRET")),
+        "auth_url": await runtime_settings.setting("GOOGLE_AUTH_URL") or "",
+        "redirect_hint": "Add {origin}/auth-complete.html as an authorised redirect URI in Google Cloud Console.",
+    }
+
+
+@router.get("/env-status")
+async def env_status(current_user: User = Depends(get_current_user)):
+    """Report whether credentials are persisted and ignored by git."""
+    await _require_operator(current_user)
+    return {
+        "file": env_writer.SECRETS_FILE_LABEL,
+        "exists": env_writer.SECRETS_FILE.exists(),
+        "keys": env_writer.read_keys(),
+        "gitignored": env_writer.is_gitignored(),
+    }
 
 
 @router.delete("/console")

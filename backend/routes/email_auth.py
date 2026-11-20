@@ -107,7 +107,13 @@ async def _matching_users(email: str):
 async def status(response: Response):
     response.headers["Cache-Control"] = "no-store"
     return {"login_available": config.EMAIL_AUTH_ENABLED, "registration_available": auth.mail_available(),
-            "recovery_available": auth.mail_available()}
+            "recovery_available": auth.mail_available(),
+            # Drives the sign-in screen: whether Google sign-in is offered, and
+            # whether the operator supplied their own OAuth client.
+            "google_login_available": bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET),
+            "google_auth_url": config.GOOGLE_AUTH_URL,
+            "preview_login_available": config.ENABLE_PREVIEW_LOGIN,
+            "dev_login_available": config.ALLOW_DEV_LOGIN}
 
 
 @router.post("/register", status_code=202)

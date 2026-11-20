@@ -143,3 +143,8 @@ backend/media_tmp/
 
 # Prepared Windows binaries are a downloadable artifact, not cloud source.
 runtime/
+
+# Provider credentials entered through the Settings console.
+# These are real secrets: keep them on this machine only.
+backend/.env
+backend/.env.local
