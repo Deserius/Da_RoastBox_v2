@@ -1,0 +1,92 @@
+DA ROASTBOX - PREPARED WINDOWS DOWNLOAD (LAUNCHER v1.2.3)
+=======================================================
+
+1. Right-click Da_RoastBox_Windows_Preinstalled.zip -> Extract All.
+   Extract EVERY file into a writable local folder. Prefer a short path such as
+   E:\RoastBox\da_roastbox. Do not launch from inside the ZIP viewer.
+
+2. Open the extracted folder and double-click:
+
+                        thelaunch.bat
+
+   start.bat and LAUNCH_DA_ROASTBOX.bat are equivalent entry points.
+   No terminal, winget, separate Python/Node setup or browser selection is normally
+   required on a supported Windows PC.
+
+3. Keep the launcher window open. It checks dependencies, starts the local API
+   and website, waits for both, then opens YOUR REGISTERED DEFAULT BROWSER at:
+
+                        http://127.0.0.1:3000
+
+4. The Hustler Anomalies Enterprises intro attempts sound automatically.
+   If your browser blocks it, press ENTER or SPACE while the page has focus,
+   or TAP/CLICK the intro. Scene and sound restart together. The sound button
+   also works; ESC / Skip moves on. An intentional mute stays muted.
+   No fake/global keystrokes are sent to your computer or another application.
+
+WHAT IS ACTUALLY IN THIS PREPARED DOWNLOAD
+- Official Windows x64 Python 3.13.16, not a copied Linux virtual environment.
+- 50 pinned application packages already installed as Windows-compatible files,
+  including the Windows FFmpeg binary, MongoDB driver and provider SDKs.
+- Windows Node 22.23.4, MongoDB 8.0.34, Yarn 1.22.22 and the required app-local
+  Microsoft C++ runtime DLLs. Large MongoDB debug symbols are NOT included.
+- A compiled React frontend. No node_modules / frontend install/build is needed
+  for an unchanged normal launch.
+
+The installed dependency tree is compressed INSIDE the download to keep it small.
+FIRST launch unpacks it locally/offline and checks its files; it does NOT run pip
+or npm/Yarn installation or download these dependencies again. Shared image/audio
+assets are stored once and copied into the prebuilt site locally when needed.
+Later launches reuse the prepared files and build, with integrity/runtime checks.
+
+If a dependency is missing/damaged, the launcher first restores it from the local
+payload. If that payload is unavailable, it searches supported installed locations
+and uses verified online setup as necessary. Source/config changes or --repair can
+need internet and a genuine rebuild. App source is never auto-downloaded/updated.
+
+REQUIREMENTS
+Full local setup targets Windows 11 x64 / Windows Server 2022 with an AVX-capable
+CPU and built-in Windows PowerShell 5.1. Not a Windows ARM/32-bit or old-OS bundle.
+Allow at least 2 GiB free after extraction for offline unpacking and initial local
+runtime/database work; 4 GiB or more is recommended for repairs, builds and growth.
+Windows still needs system-drive working space. Security/organizational restrictions
+cannot be bypassed. Do not disable antivirus. No forced reboot or system PATH change.
+
+KEEP YOUR DATA
+Existing .env files in this app folder are reused, not overwritten. MongoDB is
+reused or started privately on loopback. Ctrl+C stops ONLY this launcher's web
+servers; MongoDB is deliberately left running. NEVER delete .data\mongo or media
+as a startup fix. Already-running apps are reopened, not duplicated. Port conflicts
+are reported instead of killing other programs or cycling ports.
+
+This download EXCLUDES filled .env files, private keys, database records, balances,
+purchases and generated customer shows/media. It does not copy/reset existing data.
+Back up before updating an older installation. Do not blindly overlay this recovered
+source onto a richer/custom native version; compare the app source first.
+Installer 1.2.1 storage safeguards remain in version 1.2.3.
+
+REAL SERVICES STILL NEED YOUR PRIVATE CONFIGURATION
+Bundled software is not bundled service access. Real AI/voices, Google sign-in,
+email and Stripe TEST require valid service configuration and internet. A fresh
+folder opens the explicit local preview, not fabricated paid output. Existing
+credentials in backend\.env are kept unchanged. No AI/payment/email/cloud calls
+or model-configuration changes are performed by dependency setup.
+
+OPTIONAL ENTRY POINTS / RECOVERY
+  start.bat --repair        Reinstall into a separate venv and rebuild; uses internet.
+                           Stop only the web-app window first; leave MongoDB running.
+  start.bat --skip-mongodb  Use only a reachable database configured in backend\.env.
+  start.bat --no-browser    Start without opening a browser.
+  python start.py           Same checks/setup/start/browser path when Python can run.
+  python Launcher.py        Compatibility alias for start.py.
+
+Do not expose this local preview to untrusted networks or port-forward it.
+External beta/production needs its separate access/security/service configuration.
+See docs\LOCAL_INSTALL.md, docs\WINDOWS_BUNDLE.md and INSTALLER_SPACE_FIX.txt.
+Vendor licenses/source links: docs\WINDOWS_THIRD_PARTY.md.
+
+VERIFICATION LIMIT
+The Windows runtime was assembled from verified Windows vendor files and wheels,
+not executed here: this build workspace is Linux. Offline launcher/PowerShell and
+intercepted browser checks are not a native Windows double-click/Authenticode/
+UAC/default-browser or physical-phone test. Verify on the target PC before release.

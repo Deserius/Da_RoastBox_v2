@@ -1,0 +1,96 @@
+.splash { min-height: 100dvh; align-items: flex-end; background-size: contain; }
+.splash-card { width: min(460px,100%); margin-bottom: max(24px, env(safe-area-inset-bottom)); padding: 23px clamp(20px,4vw,32px) 19px; border-color: rgba(235,157,94,.27); border-radius: 20px; background: linear-gradient(145deg,rgba(24,15,12,.96),rgba(9,8,8,.96)); box-shadow: 0 24px 70px #000c, inset 0 1px rgba(255,255,255,.06); }
+.splash-kicker { display: flex; align-items: center; justify-content: center; gap: 8px; color: #d1a07c; font: 800 8px/1.4 system-ui,sans-serif; letter-spacing: .15em; text-align: center; }
+.splash-kicker span { width: 18px; height: 1px; flex: none; background: #995e3a; }
+.splash-title { margin-top: 7px; font-size: clamp(31px,5vw,41px); letter-spacing: .035em; }
+.splash-subtitle { margin: 2px 0 15px; color: #d6bba9; font: italic 14px/1.5 Georgia,serif; }
+.landing-divider { display: flex; align-items: center; gap: 10px; margin: 15px 0; color: #bd8d6d; font: 800 9px/1.3 system-ui,sans-serif; letter-spacing: .14em; }
+.landing-divider::before, .landing-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg,transparent,#364251); }
+.landing-divider::after { transform: rotate(180deg); }
+.landing-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid #ffbf7a; border-radius: 11px; background: linear-gradient(135deg,#ffc375,#f5773b); color: #161b20; font: 850 13px/1.3 system-ui,sans-serif; cursor: pointer; box-shadow: inset 0 1px rgba(255,255,255,.45), 0 7px 22px #f8753633; }
+.landing-google:hover:not(:disabled) { filter: brightness(1.08); }
+.landing-google:disabled, .landing-preview-btn:disabled { opacity: .5; cursor: not-allowed; }
+.landing-google-mark { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; color: #eb894b; background: white; font: 900 15px/1 Arial,sans-serif; }
+.landing-auth-note, .landing-preview p { margin: 8px 0 0; color: #bfa99b; text-align: center; font: 11px/1.5 system-ui,sans-serif; }
+.landing-status, .landing-error { margin: 10px 0 0; color: #ffb99f; text-align: center; font: 12px/1.5 system-ui,sans-serif; }
+.landing-preview { margin-top: 7px; text-align: center; }
+.landing-preview-btn { min-height: 40px; padding: 6px 10px; border: 0; background: transparent; color: #ffbd83; font: 800 12px/1.3 system-ui,sans-serif; cursor: pointer; }
+.landing-preview-btn:hover:not(:disabled) { color: #fff; }
+.landing-preview p { margin-top: 1px; font-size: 10px; }
+.landing-adults { margin: 13px 0 0; color: #a58b7c; text-align: center; font: 800 9px/1.4 system-ui,sans-serif; letter-spacing: .1em; }
+.landing-google:focus-visible, .landing-preview-btn:focus-visible { outline: 3px solid #ffd08d; outline-offset: 3px; }
+@media (max-width: 400px) { .splash-card { padding: 19px; margin-bottom: max(12px,env(safe-area-inset-bottom)); } .splash-kicker { font-size: 7px; letter-spacing: .1em; } }
+/* Compact, bottom-docked consent and separate accessible sign-in dialog. */
+/* Low, wide panel leaves the artwork visible; short screens scroll internally. */
+.landing-consent-overlay { position: fixed; inset: 0; z-index: 11000; background: linear-gradient(180deg,rgba(0,0,0,.01),rgba(0,0,0,.12)); }
+.landing-consent-card { position: fixed; z-index: 11001; left: 50%; bottom: max(10px,env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(700px,calc(100% - 24px)); max-width: 700px; max-height: min(360px, 58dvh); overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 12px clamp(14px,3vw,22px) 13px; border: 1px solid rgba(230,160,104,.38); border-radius: 16px; background: radial-gradient(ellipse at top right,#262f3a77,transparent 52%),#0f1317; color: #fff4ea; box-shadow: 0 20px 65px #000a, inset 0 1px #ffffff12; }
+.landing-consent-title { margin: 0; color: #fff8f2; text-align: left; font: 700 19px/1.2 Georgia,serif; }
+.landing-consent-title span { color: #eda873; font: 900 10px/1.3 system-ui,sans-serif; letter-spacing: .08em; }
+.landing-consent-description { margin: 3px 0 0; color: #cdb9ab; text-align: left; font: 12px/1.3 system-ui,sans-serif; }
+.landing-consent-card .inline-disclaimer { margin-top: 7px; padding: 8px 11px; border-color: #76513a; background: #151a20; font-size: 13px; line-height: 1.35; }
+.landing-consent-card .inline-disclaimer strong { color: #ffb07d; }
+.landing-consent-card .inline-disclaimer p { margin-top: 4px; }
+.landing-consent-card .inline-disclaimer .checkbox-row { margin-top: 3px; min-height: 44px; align-items: center; }
+.landing-enter { margin-top: 7px; min-height: 44px; }
+.landing-auth-overlay { position: fixed; inset: 0; z-index: 11500; background: rgba(0,0,0,.78); backdrop-filter: blur(7px); }
+.landing-auth-dialog { position: fixed; z-index: 11501; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(440px,calc(100% - 28px)); max-height: calc(100dvh - 28px); overflow-y: auto; overscroll-behavior: contain; padding: clamp(19px,4vw,30px); border: 1px solid rgba(230,160,104,.38); border-radius: 20px; background: radial-gradient(ellipse at top right,#262f3a77,transparent 52%),#0f1317; color: #fff4ea; box-shadow: 0 28px 90px #000b, inset 0 1px #ffffff12; font: 13px/1.5 system-ui,sans-serif; }
+.landing-auth-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #eda873; font: 900 9px/1.3 system-ui,sans-serif; letter-spacing: .13em; }
+.landing-auth-close { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid #76513a; border-radius: 50%; color: #fff; background: #1a1f26; cursor: pointer; }
+.landing-auth-title { margin: 14px 0 6px; color: #fff8f2; font: 700 clamp(24px,5vw,34px)/1.1 Georgia,serif; }
+.landing-auth-description { margin: 0 0 18px; color: #cdb9ab; }
+.landing-auth-close:focus-visible, .landing-enter:focus-visible { outline: 3px solid #ffd08d; outline-offset: 3px; }
+@media (max-height: 500px) { .landing-consent-card { bottom: 6px; max-height: 64dvh; } }
+@media (max-width: 280px) { .landing-consent-card { width: calc(100% - 12px); padding: 10px; } .landing-consent-card .inline-disclaimer { padding: 8px; } .landing-auth-dialog { width: calc(100% - 12px); padding: 14px; } }
+
+/* Lobby sound: original beat bed plus the periodic welcome call. */
+.landing-audio {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  /* Radix sets pointer-events: none on <body> while the disclaimer is open,
+     so the sound control must opt back in and stack above the overlay. */
+  z-index: 2147483000;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.landing-audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 181, 108, .45);
+  background: rgba(14, 12, 10, .78);
+  color: var(--gold, #e2b56c);
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+.landing-audio-btn:hover { transform: translateY(-1px); border-color: rgba(226, 181, 108, .85); }
+.landing-audio-btn:focus-visible { outline: 2px solid var(--gold, #e2b56c); outline-offset: 3px; }
+.landing-audio-hint {
+  font-size: .72rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(240, 226, 200, .72);
+  background: rgba(14, 12, 10, .7);
+  border-radius: 999px;
+  padding: 5px 10px;
+}
+@media (max-width: 620px) {
+  .landing-audio { right: 12px; bottom: 12px; }
+  .landing-audio-hint { display: none; }
+}
+/* On small screens the consent card fills the viewport, so the control moves to
+   the top corner and shrinks to an icon so it can never cover a real button. */
+@media (max-width: 620px), (max-height: 560px) {
+  .landing-audio { top: 10px; right: 10px; bottom: auto; }
+  .landing-audio-btn { padding: 8px; border-radius: 50%; }
+  .landing-audio-btn span { display: none; }
+}

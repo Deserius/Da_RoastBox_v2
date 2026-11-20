@@ -1,0 +1,32 @@
+.landing-email { display: flex; justify-content: center; align-items: center; gap: 9px; width: 100%; min-height: 44px; margin-top: 9px; padding: 9px 14px; border: 1px solid #76513a; border-radius: 11px; background: rgba(255,255,255,.035); color: #f6ddc8; font: 800 12px/1.3 system-ui,sans-serif; cursor: pointer; }
+.landing-email:hover:not(:disabled) { border-color: #f5ac76; color: white; background: rgba(255,255,255,.07); }
+.landing-email:disabled { opacity: .5; cursor: not-allowed; }
+.landing-email:focus-visible { outline: 3px solid #ffd08d; outline-offset: 3px; }
+.email-overlay, .email-overlay * { box-sizing: border-box; }
+.email-overlay { position: fixed; z-index: 12000; inset: 0; display: flex; justify-content: center; align-items: center; overflow-y: auto; padding: 14px; background: rgba(0,0,0,.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.email-dialog, .email-page-card { width: min(440px,100%); max-height: calc(100dvh - 28px); overflow-y: auto; padding: clamp(21px,4vw,32px); border: 1px solid rgba(230,160,104,.35); border-radius: 20px; color: #f6e9de; background: radial-gradient(ellipse at top right,#262f3a77,transparent 52%),#0f1317; box-shadow: 0 28px 90px #000b, inset 0 1px #ffffff12; font: 13px/1.5 system-ui,sans-serif; }
+.email-dialog-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #eda873; font-size: 9px; font-weight: 900; letter-spacing: .15em; }
+.email-close { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid #404f61; border-radius: 50%; background: #1a1f26; color: #efd8c7; cursor: pointer; }
+.email-close:hover { color: white; border-color: #eaa372; }
+.email-dialog .email-title, .email-page-card h1 { margin: 20px 0 6px; color: #fff8f2; font: 700 clamp(28px,6vw,37px)/1.1 Georgia,serif; letter-spacing: -.04em; }
+.email-description, .email-page-card > p { margin: 0 0 20px; color: #cdb9ab; line-height: 1.6; }
+.email-form { display: grid; gap: 13px; }
+.email-form label { display: grid; gap: 6px; color: #ecd7c8; font-size: 11px; font-weight: 800; }
+.email-form input { width: 100%; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1px solid #404e5f; border-radius: 9px; background: #0a0d10; color: #fff4ea; font: 15px/1.3 system-ui,sans-serif; }
+.email-form input:focus { border-color: #ffb679; outline: 2px solid #f9a76e55; }
+.email-submit { display: flex; justify-content: center; align-items: center; gap: 7px; width: 100%; min-height: 47px; padding: 10px 13px; border: 1px solid #ffc185; border-radius: 10px; color: #171d23; background: linear-gradient(135deg,#ffc676,#f77c3c); font: 900 12px/1.3 system-ui,sans-serif; cursor: pointer; }
+.email-submit:disabled { opacity: .55; cursor: not-allowed; }
+.email-submit:hover:not(:disabled) { filter: brightness(1.08); }
+.email-mode-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.email-mode-links button, .email-back { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 5px 0; border: 0; background: transparent; color: #ffc08a; font: 800 11px/1.3 system-ui,sans-serif; cursor: pointer; }
+.email-mode-links button:hover, .email-back:hover { color: white; }
+.email-hint { margin: 0; color: #b9a395; font-size: 11px; line-height: 1.55; }
+.email-error { margin: 0; color: #ffb39e; font-size: 12px; line-height: 1.5; }
+.email-not-configured, .email-success { padding: 14px; border: 1px solid #3b4858; border-radius: 10px; background: #171d23; color: #e6cdbb; font-size: 12px; line-height: 1.6; }
+.email-success strong { color: #ffe1c3; }
+.email-success p { margin: 7px 0; }
+.email-overlay button:focus-visible, .email-page button:focus-visible { outline: 3px solid #ffca80; outline-offset: 3px; }
+.email-page { display: grid; place-items: center; min-height: 100dvh; padding: 20px; background: radial-gradient(circle at 50% 15%,#27303b 0, #0d1014 35%,#070606 80%); }
+.email-page-card { max-height: none; }
+.email-page-brand { display: flex; align-items: center; gap: 6px; color: #f6ad73; font-size: 10px; font-weight: 900; letter-spacing: .16em; }
+.email-page-icon { display: grid; place-items: center; width: 47px; height: 47px; margin-top: 25px; border: 1px solid #9a6346; border-radius: 14px; background: #252e38; color: #ffc48f; }

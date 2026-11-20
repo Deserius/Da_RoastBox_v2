@@ -1,0 +1,728 @@
+ONE-CLICK LOCAL START UPDATE (2026-11-05)
+Extract the entire source ZIP. Windows: double-click LAUNCH_DA_ROASTBOX.bat (start.bat remains equivalent). Installer 1.2.2 automatically discovers supported x64 Python or installs verified official Python without winget, prepares pinned project-local dependencies, creates configuration only when absent, builds when needed, starts the API on 127.0.0.1:8001 and the frontend on port 3000, waits for readiness, then opens the registered default browser. Keep the window open; Ctrl+C stops its web children only and deliberately leaves MongoDB running. Existing settings/database/media are retained, not imported from the public ZIP. First run needs internet, free storage, supported hardware/Windows and any necessary permission approval; the launcher never forces a reboot or bypasses system policy. Real AI, Google login and Stripe TEST still need their valid service configuration. See START_HERE.txt and docs/LOCAL_INSTALL.md; those current instructions supersede legacy manual prerequisite steps below.
+
+RAP BATTLE UPDATE (2026-11-05)
+Battle offers Classic or Rap, with the existing access, credits, heat, language and boundaries. Rap uses fictional fighter profiles and local portraits; in the two-stage OpenRouter path, OpenAI vision analyzes portraits together with any guest photos in one request, and the writer receives labeled observations, not image bytes. Vision and TTS may incur charges even without a guest photo. The legacy writer receives labeled portrait images directly. No new provider or account is required. An original locally synthesized 90 BPM loop backs spoken TTS; delivery and beat synchronization are approximate, not singing. Voice stays forward with a separate beat slider and ducking; the beat stops with playback and is included in newly rendered rap reels. Old records default to classic. Reels and live provider output have not been end-to-end verified; do not treat mock tests as proof of musical quality. Offline checks: python backend/scripts/test_rap_battle.py and node scripts/test_crowd_timing.js (shell: Bash).
+
+COMEDY STYLES AND PAID CREATIVE PROFILE (supersedes older writer notes)
+The Studio and Battle forms allow several optional comedy lenses; these augment
+existing fictional personas, selected heat, clean/adult mode and boundaries.
+Existing show/beat and speech formats are retained. They are not a standalone
+5–10-joke ranking/favorites product, and there is no new five-level heat scale.
+
+The preview remains on its previously approved FREE writer. Paid creative
+profile is prepared but disabled. To opt in, privately configure the API server:
+ROAST_WRITER_PROFILE=creative and ROAST_FREE_WRITER_ONLY=false, with an
+OpenRouter key and available credits; restart the API without any conflicting
+environment overrides. The default primary is thedrummer/cydonia-24b-v4.1 and
+the backup is cognitivecomputations/dolphin-mistral-24b-venice-edition.
+Mistralai/mistral-uncensored-1.2 was not in the catalog when inspected and is
+not configured. Hermes is not offered as a premium UI option; an administrator
+may investigate selecting a supported model through the model environment
+variables. Free-only mode blocks paid model IDs. Pollinations and Emergent
+fallbacks remain separately controlled by their existing flags; review privacy
+and cost before enabling them.
+
+Creative requests impose OpenRouter provider per-million-token rate ceilings
+configured with ROAST_MAX_INPUT_USD_PER_M and ROAST_MAX_OUTPUT_USD_PER_M.
+These are NOT an account or daily dollar spending cap. Configure OpenRouter
+key-level budget/guardrail and provider limits separately. The existing preview
+show/voice counters are attempt limits, not spending caps. A primary timeout
+gets at most one explicit retry; a timed-out request may already be billable.
+Output extraction handles some malformed JSON locally; it is not a guaranteed
+repair or a paid rewrite. Model latency and usage/cost are logged when returned
+without prompts or secrets; missing provider cost is unknown, not zero. Photo
+vision and TTS can bill separately. No live provider or 20-prompt paid benchmark
+was run; model availability, quality, retries and costs must be verified before
+production. User-supplied OpenAI/ElevenLabs credentials still take precedence.
+
+SPLASH AND RESPONSIVE UPDATE: After the skippable Hustler Anomalies intro,
+a compact bottom-docked disclaimer dialog requires the 18+ checkbox before
+Enter the Roast. It contains no lounge control. Enter opens a separate centered
+sign-in dialog for signed-out users. The lounge remains available inside the
+account menu. Intro audio has a locally generated impact; browsers may block
+autoplay, in which case use Replay with sound. No sound plays on reduced-motion
+intro by default. Direct links retain their consent gate. Layout and controls
+were tested in emulated viewport sizes; real physical devices remain unverified.
+
+SHOW DRAFT LIFETIME: Studio and Battle selections, text, heat, duration,
+toggles and crowd volume are held per signed-in user and browser tab for the
+session; they survive in-app navigation and ordinary reloads. Logout, an
+expired session or account switch clears them. Uploaded photo files stay
+only in browser memory across in-app navigation and must be selected again
+after a page reload or tab close; they are never written to browser storage.
+Unsaved API key fields are intentionally not retained across navigation.
+
+UPDATE — FREE WRITER, OPTIONAL FALLBACKS (supersedes earlier provider notes)
+When ROAST_WRITER_PROVIDER=openrouter, the default writer model is
+ROAST_WRITER_MODEL=google/gemma-4-31b-it:free; the second free model is
+ROAST_FREE_BACKUP_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free. Free model
+availability, quality, filtering and limits can change. These are not verified
+uncensored models. Free-only mode (ROAST_FREE_WRITER_ONLY=true) rejects model
+IDs without :free before generation. Optional ROAST_POLLINATIONS_FALLBACK=true
+adds a no-signup, rate-limited, best-effort text fallback; it can receive the
+name, context, boundaries, and photo observations, but not photo files or keys.
+It may cache responses. Inform end users; avoid sensitive information.
+OpenAI or Emergent still analyzes photos and supplies speech and MAY CHARGE;
+AI_DEFAULT_PROVIDER=openai selects OpenAI for hosted vision/speech where
+configured, while user OpenAI/ElevenLabs BYOK retains precedence. Writer
+fallbacks do not repair a failed vision or TTS call. Emergent's writer fallback
+is preserved but runs only if ROAST_FREE_WRITER_ONLY=false and
+ROAST_ALLOW_PAID_WRITER_FALLBACK=true; it can charge. To use a paid writer
+later, set ROAST_FREE_WRITER_ONLY=false and ROAST_WRITER_MODEL to the desired
+model; restart the API. Put all keys only in private server configuration.
+No provider can be guaranteed always available. Live generation was NOT tested;
+only offline mocks were run. Preview hosted AI is separately disabled unless
+explicitly enabled and budgeted, even if a user supplies an OpenAI BYOK key.
+
+DA ROASTBOX — INSTALLATION, BUILD AND DEPLOYMENT MANUAL
+Beginner operating guide, hosting, Android and iOS planning
+Audit date: 2026-11-04. This document describes the source as inspected.
+==========================================================================
+
+READ FIRST — WHAT THIS GUIDE CAN AND CANNOT PROMISE
+A terminal is a text window for entering commands. PowerShell is the Windows
+terminal used below; Bash is a common macOS/Linux terminal. A repository is a
+versioned project folder, a dependency is an installed package, and deployment
+means putting the app on a server so other people can use it. The frontend is
+the page users see; the backend is its Python server. An API connects them.
+
+The source archive does not include customer databases, real API keys, provider
+accounts, environment files, installed packages or generated private media.
+This is not proof that a real cloud account, payment, email, Google login,
+mobile build or production launch works. Test live services only after approval;
+AI and voice tests may cost money. Preview login is for private testing, never a
+production identity system. Read the other two root manuals for architecture
+and AI changes, and docs/LOCAL_INSTALL.md, DEPLOYMENT.md and INTEGRATIONS.md.
+
+1. BEFORE YOU START
+-------------------
+You need a 64-bit computer, reliable internet and several GB of free disk.
+The installer downloads dependencies and a large MongoDB archive. A local
+preview uses port 3000 for the frontend, 8001 for API and 27017 for MongoDB;
+other software must not occupy them. Supported Python is 3.11–3.13, recommended
+3.13: https://www.python.org/downloads/ . On Windows select the option to add
+Python to PATH. A code editor such as https://code.visualstudio.com/ makes
+editing easier. Git is a change-history tool: https://git-scm.com/downloads .
+A GitHub account at https://github.com/ is optional for local use, useful for
+hosting. Never install or run a source archive from inside the ZIP viewer.
+
+install.py downloads project-local Node 22.23.4, Yarn 1.22.22 and MongoDB 8.0.34
+with pinned checksums; it does not require a global Node installation. For
+manual/npm/Capacitor work install a suitable Node version from
+https://nodejs.org/ . MongoDB Community is from https://www.mongodb.com/try/download/community
+and Atlas is at https://www.mongodb.com/atlas . On supported platforms the local
+installer supplies MongoDB; Windows x86-64 requires supported Windows and an
+AVX-capable CPU. Windows ARM, older systems or unsupported Linux/macOS can use
+an already configured MongoDB or Atlas. Physical Windows/macOS installer and
+mobile tests were not verified in the source audit; see docs/LOCAL_INSTALL.md.
+
+Provider accounts are separate: OpenAI https://platform.openai.com/ ; ElevenLabs
+https://elevenlabs.io/ ; Stripe https://stripe.com/ ; a TLS SMTP email provider;
+managed Google login depends on Emergent's existing service contract. Only set
+up what you need. Costs, access and platform policies vary. Never post a key,
+password, database URI, JWT_SECRET, session token or screenshot of them.
+
+2. INSTALL FROM A SOURCE ZIP — WINDOWS POWERSELL
+--------------------------------------------------
+1. Extract the entire archive to a writable folder. Open its project folder; it
+   must contain install.bat, frontend and backend. The exact folder name depends
+   on how the ZIP was extracted. No public repository URL was supplied.
+2. In File Explorer, click the folder address bar, type powershell and press
+   Enter. This opens PowerShell in that folder. Verify:
+      Get-ChildItem install.bat,frontend,backend
+   You should see all three names. If not, open the correct folder first.
+3. Install Python 3.11–3.13 if absent. Check:
+      py -3.13 --version
+   If you have another supported version use that instead. The Windows
+   current launcher automatically prepares verified per-user Python without winget; approve required Windows permissions.
+4. Install the project:
+      .\install.bat
+   The installer creates .venv, downloads checked local tools, installs
+   frontend/backend packages and creates backend/.env and frontend/.env ONLY
+   if missing. It can take several minutes. Read any errors; do not disable
+   checksum checks. Existing .env/data are retained, not reset.
+5. Start it:
+      .\start.bat
+   Keep the terminal open. Wait until the frontend finishes compiling, then open
+   http://localhost:3000 . Close by pressing Ctrl+C in that terminal. Only
+   child processes launched by this launcher are stopped; an already-running
+   MongoDB is not stopped.
+6. Skip/watch the intro and accept the 18+ statement. On a freshly generated
+   private development config choose Explore the preview. This is a disposable
+   account, not a production login. Browsing requires no AI key.
+7. Verify the backend separately in PowerShell:
+      Invoke-RestMethod http://localhost:8001/api/health
+   Expect a status and version. Optional shallow diagnostics:
+      Invoke-RestMethod http://localhost:8001/api/diagnostics
+   An optional provider can show unconfigured. Do not add ?deep=true without
+   explicit approval: that endpoint contacts external providers and can cost.
+8. For real generation, configure a supported provider key securely or use a
+   user key in Settings; generation and uncached voice previews can be billed.
+   Default preview hosted AI is disabled. Do not expose a preview on the public
+   internet. Production requires a separate review described below.
+
+If using an existing database rather than downloading MongoDB:
+  .\install.bat --skip-mongodb
+Then edit backend/.env in a private editor and set MONGO_URL and DB_NAME to
+that already running server. Do not paste the URI into chat or logs. Run
+.\start.bat. A remote/authenticated server is not automatically started.
+
+2A. MACOS/LINUX BASH
+---------------------
+Extract, open Terminal in the folder containing install.sh, then:
+  python3 --version
+  ./install.sh
+  ./start.sh
+Open http://localhost:3000 after the compile message. Ctrl+C stops the launcher.
+For existing Mongo: python3 install.py --skip-mongodb, privately configure
+backend/.env, then ./start.sh. Linux may need the matching python3-venv OS
+package. The installer can offer system packages via apt/Homebrew; review before
+allowing elevated access. See docs/LOCAL_INSTALL.md for supported Mongo targets.
+
+2B. IF STARTING FROM A PRIVATE GIT REPOSITORY INSTEAD
+------------------------------------------------------
+The owner must supply the real Git clone URL and access. In PowerShell choose
+an existing parent directory in Explorer, open PowerShell there, then run the
+following ONLY after replacing the placeholder with your actual URL:
+  git clone <YOUR-PRIVATE-REPOSITORY-URL>
+Git creates a directory and reports its name. Open that directory in Explorer,
+open PowerShell there and confirm Get-ChildItem install.bat,frontend,backend.
+Continue from step 3 above. No repository address is invented in this guide.
+
+3. CONFIGURATION, RUNNING AND RESTARTING LOCALLY
+-------------------------------------------------
+An environment file is private configuration, not source code. Templates:
+backend/.env.example and frontend/.env.example. The installer creates real
+files if missing; NEVER overwrite an existing real .env blindly. For a manual
+configuration, first back it up privately; copy only if a file does not exist:
+  if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
+  if (-not (Test-Path frontend\.env)) { Copy-Item frontend\.env.example frontend\.env }
+Edit backend/.env in a private editor. MONGO_URL, DB_NAME and a long persistent
+JWT_SECRET are required. Prefer the installer-generated random secret; never
+paste one into documentation. STORAGE_BACKEND=local is appropriate for a
+private standalone preview. For production, configure private durable storage.
+Set optional provider flags and secrets only when needed; see Developer Notes
+section 6. Keep ALLOW_DEV_LOGIN, ENABLE_PREVIEW_LOGIN, ALLOW_PREVIEW_HOSTED_AI,
+ALLOW_SOURCE_DOWNLOAD false for production. Do not commit either real .env.
+
+The frontend makes same-origin /api calls. The local launcher sends them to its
+API_PORT via API_PROXY_TARGET; default is 8001. The API log and frontend log
+appear in the launch window; don't paste sensitive output publicly. For new
+ports in PowerShell (only in this session):
+  $env:PORT = "3100"
+  $env:API_PORT = "8101"
+  .\start.bat
+Then use http://localhost:3100 and http://localhost:8101/api/health. To clear
+these temporary variables in that terminal: Remove-Item Env:PORT,Env:API_PORT.
+Closing the shell also clears its temporary environment. Press Ctrl+C, wait for
+shutdown, then run .\start.bat again to restart. The installer is not required
+on each restart. Never run a second API instance against the same active reel DB.
+
+Advanced manual split startup (not needed after the normal launcher): ensure
+Mongo is already reachable and dependencies/.env exist. In one PowerShell in
+project root:
+  Set-Location backend
+  ..\.venv\Scripts\python.exe -m uvicorn server:app --host 127.0.0.1 --port 8001 --workers 1
+In a second PowerShell at project root, using global Node + Corepack/Yarn:
+  Set-Location frontend
+  $env:API_PROXY_TARGET = "http://127.0.0.1:8001"
+  corepack yarn start
+The installer stores its own Node/Yarn in .cache/local-tools; if Corepack is not
+available, use start.bat rather than assuming a global executable. Do not bind
+MongoDB publicly or enable arbitrary dev login. Server restart is required for
+backend config/catalog changes; React dev server handles most source edits.
+
+4. PRODUCTION BUILD AND VERIFICATION
+--------------------------------------
+A development server is for editing, not public hosting. A production build is
+optimized frontend static files, output to frontend/build. From a configured
+PowerShell with global compatible Node/Corepack in project root:
+  Set-Location frontend
+  corepack yarn install --frozen-lockfile --non-interactive
+  corepack yarn build
+  Test-Path .\build\index.html
+  Set-Location ..
+Expected: build compiles and Test-Path returns True. The source uses CRA/CRACO;
+frontend/package.json script is yarn build. If no global Corepack, the included
+Dockerfile performs the production build with pinned Node/Yarn. Never copy an
+API secret into a REACT_APP_* variable: all of those are public build output.
+
+Dockerfile builds the frontend and Python backend into one image; FastAPI serves
+the built site and /api when FRONTEND_BUILD_DIR=/app/frontend/build. The Docker
+entrypoint drops privileges and uses one Uvicorn worker. Production server needs
+real private MONGO_URL, DB_NAME and stable JWT_SECRET, HTTPS, persistent private
+media, correct APP_BASE_URL, appropriate sign-in and provider configuration.
+The Blueprint sets local media at /var/data/roastbox on a persistent disk.
+One worker and one instance only: reel startup recovery is not multi-worker
+safe. The container's audio_cache is temporary and can be regenerated from
+backing media; do not confuse it with persistent original audio. Run isolated
+backend tests and safe health checks before release. No production launch is
+verified merely because a build succeeds.
+
+5. GIT AND GITHUB WITHOUT LEAKING SECRETS
+-------------------------------------------
+Git remembers changes; GitHub hosts a repository online. The source archive may
+not have a .git history. First make a PRIVATE backup of the original folder and
+separate database, media and JWT_SECRET. On github.com create a private empty
+repository under your own account. Copy its real HTTPS or SSH URL; no URL is
+provided with this project. In PowerShell at project root:
+  git --version
+  git status
+If it says not a Git repository, initialize it:
+  git init
+  git branch -M main
+Before staging anything inspect .gitignore and:
+  git status --short --untracked-files=all
+Never add backend/.env, frontend/.env, .data, .cache, .venv, node_modules,
+private media, generated customer audio/images, logs, backups, session tokens
+or workspace memory. Review .gitignore for your environment; it is not a
+complete security scanner. Use the sanitized source ZIP or an allowlist of
+reviewed files. Verify ignored paths without printing their contents:
+  git check-ignore backend/.env frontend/.env
+Stage individual known-safe files or folders, review and commit:
+  git add README.md backend frontend docs scripts Dockerfile render.yaml
+  git diff --cached --stat
+  git diff --cached
+  git commit -m "Initial reviewed Da RoastBox source"
+If any sensitive file appears, unstage it before commit:
+  git restore --staged <PATH-TO-REMOVE>
+Replace the placeholder with the actual path. Inspect binary assets and large
+files too; text scans cannot detect secrets in images/audio. If sensitive data
+was already committed, revoke/rotate it and get help cleaning history; deleting
+a later file is not enough. Do not push until reviewed.
+
+To connect the private GitHub repository, replace the placeholder:
+  git remote add origin <YOUR-PRIVATE-REPOSITORY-URL>
+  git push -u origin main
+Authenticate in Git's browser/credential helper when requested; do not put a
+password or token in a command. Later: git status; git diff; git add <reviewed
+path>; git commit -m "Describe update"; git push. Before git pull, commit or
+back up your uncommitted changes. For a safe rollback, use git log --oneline,
+make a new branch from a known commit, verify it in an isolated environment,
+then deploy by your host's rollback process; do not run git reset --hard without
+a backup. A Git repo does not back up MongoDB, private media or JWT_SECRET.
+
+6. CLOUD HOSTING — RECOMMENDED RENDER PATH
+-------------------------------------------
+The included render.yaml and Dockerfile are the most concrete deployment path;
+Render deployment itself was NOT VERIFIED in a real account. The Blueprint
+creates one paid 1c-2g web service plus 1 GB persistent disk, not a free plan.
+Review current price at https://render.com/pricing and provider fees before
+confirming. A host is an online computer; a domain is your public address;
+HTTPS encrypts the connection. Back up production before every change.
+
+1. Push reviewed source to a PRIVATE GitHub repository with render.yaml at its
+   top level. Confirm no secrets or private media were committed.
+2. Create a MongoDB Atlas cluster at https://www.mongodb.com/atlas or use another
+   reachable secured MongoDB. Create a limited read/write database user, network
+   access rules for the web service, and TLS. Copy the private application
+   connection string into a secure manager, not documentation. Atlas passwords
+   with special characters may need URI encoding. Review Atlas costs.
+3. Sign in at https://dashboard.render.com/ . Choose New -> Blueprint, connect
+   GitHub and choose the repository/branch. Review service, disk and region.
+   The repo root is the build context; Dockerfile and render.yaml define commands.
+   When prompted enter the private MONGO_URL. DB_NAME defaults to da_roastbox.
+4. Render generates JWT_SECRET. Store a secure backup; losing/rotating it can
+   prevent decryption of existing user BYOK credentials. Wait for deployment;
+   read logs without exposing secrets. Database must be reachable at startup.
+5. Open the assigned HTTPS service URL; /api/health should return status and
+   version. /api/diagnostics is shallow. Complete actual UI, login and upload
+   checks with synthetic data. Do not request deep diagnostics without approval.
+6. In Render Environment configure optional provider values privately. To enable
+   verified email set EMAIL_AUTH_ENABLED and TLS SMTP values plus exact HTTPS
+   APP_BASE_URL. For checkout use matching Stripe TEST key and webhook secret;
+   keep STRIPE_TEST_ONLY=true. Review docs/INTEGRATIONS.md. Managed Google must
+   permit your actual HTTPS /auth-complete.html origin; live flow unverified.
+7. For a custom domain use Render's domain settings, follow its DNS/HTTPS
+   verification steps and wait for certificate issuance. Set APP_BASE_URL to
+   the exact canonical HTTPS origin (no path); redirect alternative names to it.
+   A separate origin requires exact CORS_ORIGINS and cross-origin auth review.
+8. Configure Stripe TEST webhook at your domain's /api/payments/webhook and
+   subscribe to checkout.session.completed. Test purchase, cancellation,
+   delivery and duplicate event with owner permission; real Stripe is unverified.
+   Plus/VIP are one-time 30-day passes, not automatic recurring subscriptions.
+9. Deploy updates by pushing a reviewed commit/triggering deploy. Monitor logs,
+   health and disk. Use Render's documented rollback to a prior deploy, and
+   restore database/media separately if a migration changed them. Back up first.
+
+Production caveats: in-process reel rendering + startup recovery require one
+worker/instance. Render persistent disk is private and single-instance; create
+independent backups. New operations have billing/recovery markers, not complete
+end-to-end idempotency; a second submitted request can incur a second charge.
+Implement a durable job queue, request-level idempotency and reconciliation
+before scaling or relying on live payments. Preview count limits are not dollar
+limits. Real Google, SMTP, Stripe and deployment tests have not been completed.
+
+6A. OTHER HOSTING — EVALUATION, NOT VERIFIED RECIPES
+-----------------------------------------------------
+Railway (https://railway.com/) and Fly.io (https://fly.io/) can potentially run
+the existing Dockerfile as a single Python/web service with reachable MongoDB
+and a persistent private volume. On the platform: create an account, connect
+the reviewed repo, choose Dockerfile at project root, use the Dockerfile CMD
+(Uvicorn honors PORT), set private backend variables and persistent mount,
+keep one instance/worker, configure domain/HTTPS, deploy, check /api/health,
+logs and backups, and verify provider callbacks. Their UI, volume lifecycle,
+service resources, network rules and rollout overlap MUST be checked against
+current platform docs; NOT TESTED. Do not deploy overlapping app instances
+against live reel jobs. A managed volume is not itself a backup.
+
+Vercel (https://vercel.com/) and Netlify (https://www.netlify.com/) are suitable
+for the React static build, but the static frontend alone cannot run this Python
+FastAPI server, FFmpeg jobs or MongoDB. A separate backend + secure media store,
+HTTPS, strict CORS, authentication, SPA fallback, OAuth callback and payment
+origin design are required. Their serverless functions are not a drop-in for
+the in-process long reel jobs. No platform-specific configuration is present or
+verified; do not assume they can run this app unchanged. Prefer the included
+one-origin Render design until a developer implements and tests separation.
+
+7. DATABASE, MEDIA, BACKUP AND RESTORE
+----------------------------------------
+A database stores structured account, show and payment records; media storage
+holds the separate images/audio/video. Atlas is one option, not included in a
+source ZIP. For production, choose a secured MongoDB host, enable TLS and
+restrict network access and user permissions. Set MONGO_URL and DB_NAME only
+in the private service environment. See docs/DEPLOYMENT.md for Atlas access.
+
+Backups require THREE separate pieces: (1) MongoDB backup using your provider's
+encrypted backup/snapshot/PITR tools; (2) a private encrypted backup of media
+under LOCAL_STORAGE_DIR (or the configured object store); (3) a separately
+secured backup of stable JWT_SECRET and other necessary deployment settings.
+The source Git repository is a fourth, separate backup. Follow your provider's
+backup docs instead of pasting a URI/password into a shell command. Set backup
+schedules, access control, retention, and alerts. Test a restore by creating a
+separate empty database/storage and pointing a separate offline test deployment
+at them; verify users, shows, photos, audio and key decryption. Do not restore
+onto live data without a maintenance plan and a tested rollback. Local preview
+data is in .data/mongo/ and backend/local_storage/ by default; for a consistent
+file copy stop the launcher/database cleanly first. Do not delete them as a
+troubleshooting shortcut. Remote database password rotation needs coordinated
+updates to the host secret; JWT_SECRET rotation can make BYOK data unreadable.
+
+There is no migration framework or complete automatic user-data retention policy
+in source. Schema/index changes and deletion policies need explicit code,
+privacy/legal review, tested migration and backup. No public URL should point
+directly at the private storage directory or bucket. Keep disk capacity and
+failure alerts monitored. Render ephemeral container storage disappears on
+redeploy; only the mounted volume survives and needs separate backup.
+
+8. TROUBLESHOOTING — SYMPTOM / CAUSE / FIX / VERIFY
+------------------------------------------------------
+A. App won't start
+SYMPTOM: terminal exits or page cannot load. CAUSE: wrong folder, dependency,
+port, config or database. FIX: 1. Open folder containing start.bat. 2. Read
+last safe error lines; check Python and run installer again (preserves data).
+3. Check backend/.env exists without displaying its contents. 4. Check ports.
+VERIFY: launcher compiles; http://localhost:3000 and /api/health respond.
+
+B. Missing dependencies
+SYMPTOM: module not found / command not recognized. CAUSE: incomplete install,
+network failure or wrong Python. FIX: 1. Confirm supported Python. 2. Run
+.\install.bat again (or ./install.sh). 3. Read checksum/network errors; never
+bypass checksum. VERIFY: successful installer and launcher startup.
+
+C. Missing environment variables
+SYMPTOM: startup says MONGO_URL, DB_NAME or JWT_SECRET missing. CAUSE: missing
+or empty backend/.env. FIX: 1. Check file exists. 2. Run installer if absent;
+otherwise edit it privately, filling required values and preserving old secret.
+3. Restart. VERIFY: /api/health responds and logs show startup complete.
+
+D. Invalid provider key / AI or voice failure
+SYMPTOM: unavailable, unauthorized or payment/quota error. CAUSE: disabled
+provider, invalid key, insufficient credits, unavailable model/voice, network
+or access rights. FIX: 1. Check Settings and shallow diagnostics without
+revealing keys. 2. Check provider dashboard quota and configured model. 3. Use
+mock tests; only attempt live generation after owner approval and cost limits.
+4. Check logs for safe error category. VERIFY: mocked checks pass, then an
+approved small synthetic live test produces complete script/audio. Local
+rejection may still be billed by provider even if app credits are not charged.
+
+E. MongoDB failure
+SYMPTOM: startup/diagnostics reports database unreachable. CAUSE: server off,
+port, network allowlist, TLS or credentials. FIX: 1. Check local launcher and
+.data/mongo-27017.log. 2. For Atlas verify network rules and account privately.
+3. Use secured current URI in backend/.env or host environment; don't print it.
+VERIFY: shallow diagnostics reports Mongo ping successful.
+
+F. Frontend cannot reach backend / CORS
+SYMPTOM: page loads but catalog/auth fails. CAUSE: wrong proxy/API URL, backend
+offline or origin denied. FIX: 1. Open /api/health via the same origin. 2. For
+local launcher verify API_PORT and API_PROXY_TARGET match. 3. For split hosting
+configure only exact trusted HTTPS CORS_ORIGINS and rebuild public frontend API
+URL. 4. Inspect browser network/console without copying session headers.
+VERIFY: health through site origin and signed-in catalog request succeeds.
+
+G. Port already in use
+SYMPTOM: launcher reports port 3000/8001 occupied. CAUSE: another program.
+FIX: 1. Stop only the known app using it. 2. Or set PORT and API_PORT to unused
+values as in section 3. 3. Restart. VERIFY: new URLs load and health responds.
+Avoid killing unknown processes or deleting database files.
+
+H. Build failure
+SYMPTOM: yarn build reports dependency or memory errors. CAUSE: wrong Node/Yarn,
+missing network, low memory or code error. FIX: 1. Verify supported Node and
+Corepack. 2. Reinstall using locked yarn file. 3. Read first error, fix in a
+branch. 4. Use Docker/Render build if appropriate. VERIFY: build/index.html and
+successful build log; run tests. Never commit node_modules or build artifacts.
+
+I. Deployment failure or crash
+SYMPTOM: host deploy fails or health check times out. CAUSE: bad build, missing
+runtime variables, inaccessible Mongo or insufficient RAM. FIX: 1. Read build
+and service logs. 2. Confirm Dockerfile/root and private environment values.
+3. Check DB network/TLS and persistent disk. 4. Roll back safely if necessary.
+VERIFY: HTTPS site loads, /api/health works and /api/diagnostics shows Mongo.
+
+J. Audio silent or inconsistent
+SYMPTOM: captions work but no sound, or different apparent loudness. CAUSE:
+autoplay restriction, provider error, device mute, unavailable file or mix.
+FIX: 1. Tap play/resume, check device/browser volume and theater crowd slider.
+2. Check safe media errors, sign-in/share authorization and provider status.
+3. Run offline voice and crowd tests. 4. Listen on real devices after approval.
+VERIFY: sample and fixture show play with clear speech. Voice mastering helps,
+but cannot guarantee equal perceived loudness or provider delivery quality.
+
+K. Missing image or reel
+SYMPTOM: photo not shown or reel fails. CAUSE: oversized/invalid image, private
+storage failure, revoked share, disk full or FFmpeg failure. FIX: 1. Use JPEG,
+PNG or WebP, <=8 MiB each, <=25 MP; max 4. 2. Check auth and storage/disk.
+3. Inspect reel job state and refund; don't retry blindly after lost response.
+VERIFY: fixture image displays and offline reel smoke completes.
+
+L. Mobile layout / sign-in
+SYMPTOM: clipped buttons, OAuth loop or muted playback. CAUSE: viewport/safe
+areas, popups, native WebView origin or autoplay. FIX: 1. Test browser at
+several widths and a real phone. 2. Check callback/HTTPS and cookie behavior.
+3. Use a user gesture for sound. 4. See mobile sections for native gaps.
+VERIFY: complete sign-in/upload/play/replay/share on actual device.
+
+9. ANDROID — PWA, TRUSTED WEB ACTIVITY OR CAPACITOR?
+-----------------------------------------------------
+Current source has NO Capacitor configuration/native project and no verified
+PWA manifest/service worker/offline support in frontend/public. It is a web
+application, not a ready APK. This section is a FUTURE implementation plan,
+not a tested conversion. The simplest first step is to use the already-hosted
+HTTPS site in Chrome on Android and test it; an installable PWA would additionally
+need an appropriate manifest/icons, HTTPS, installability requirements and an
+explicit cache/offline design. No offline show generation is implemented.
+
+A Trusted Web Activity (TWA) opens a verified hosted PWA inside Android. It
+requires a production domain, Digital Asset Links, Android app signing and PWA
+quality. It is viable if the app remains online and the owner controls the
+site/domain, but is not implemented or verified here. Capacitor packages the web
+build in a native WebView and permits native plugins; it is a reasonable path
+for future native features, but NOT a one-command fully functional conversion.
+Store rules, testing, security, maintenance and provider callbacks still apply.
+See https://capacitorjs.com/docs/getting-started and
+https://developer.chrome.com/docs/android/trusted-web-activity/ .
+
+IMPORTANT NATIVE BLOCKERS TO SOLVE BEFORE A FUNCTIONAL RELEASE:
+* The bundled frontend runs under a native WebView origin, not your hosted
+  domain. Empty REACT_APP_BACKEND_URL points /api at that local origin, where
+  FastAPI does not exist. Use an explicitly configured public HTTPS backend and
+  carefully allow the actual WebView origin in backend CORS; never use the
+  phone's localhost as if it were the developer computer or ship secret keys.
+* Several portraits/assets use root-relative /assets paths and CRA BrowserRouter
+  assumes web-origin routes. Review public-path handling, embedded assets,
+  refresh/deep links, frontend/src/lib/media.js and share URLs on each platform.
+* AuthContext constructs managed OAuth callback from window.location.origin;
+  a WebView origin may not be accepted by the managed provider. Implement a
+  secure external-browser OAuth/deep-link flow with state/PKCE as appropriate,
+  verify session and return URLs, cookie/token behavior and provider support.
+  APP_BASE_URL and Stripe checkout currently expect a trusted HTTPS origin;
+  native origin and deep-link return require design/implementation, not just a
+  CORS toggle. Avoid leaking tokens through URLs or logs.
+* Store policies for mature content, user-generated material, age screening,
+  digital-goods billing and external links differ by region and change over
+  time. Existing Stripe web checkout is NOT automatically store-compliant.
+  Review https://developer.apple.com/app-store/review/guidelines/ and
+  https://support.google.com/googleplay/android-developer/answer/9858738
+  with counsel and each store before distribution. App approval is not assured.
+
+9A. ANDROID CAPACITOR EXPERIMENT — USE A BRANCH OR COPY
+--------------------------------------------------------
+These commands intentionally MODIFY package.json/lockfile and add a native
+project; do NOT run in the original untouched copy. They are a proposed setup,
+not tested with this app. Android Studio download:
+https://developer.android.com/studio . Capacitor 8 documentation, checked for
+this audit, specifies Node 22+, Android Studio 2025.2.1+, Android SDK platforms
+API 24+; use SDK Manager to install current platform/tools. Requirements and
+Play target API deadlines can change; check official docs at release time.
+
+1. Back up and create a Git branch in a copy. Install global Node 22+ and Android
+   Studio; open SDK Manager, install an SDK platform and platform-tools. Android
+   Studio includes its appropriate JDK. Configure an emulator or enable USB
+   debugging on a test phone. No native changes are part of the present project.
+2. Open PowerShell in that copy's frontend folder:
+     Set-Location frontend
+     node --version
+     corepack yarn --version
+3. Add matching Capacitor major versions using the existing Yarn package manager:
+     corepack yarn add @capacitor/core@^8 @capacitor/android@^8
+     corepack yarn add --dev @capacitor/cli@^8
+   This downloads packages and changes package.json/yarn.lock. Review changes.
+4. Initialize interactively:
+     corepack yarn cap init
+   Enter app name Da RoastBox and a reverse-domain app ID that YOU control,
+   for example replace com.example.roastbox with your own unique registered
+   identifier before store submission. Inspect generated capacitor.config.*:
+   webDir must be "build" because frontend/package.json builds to build/.
+   The following illustrates intended values, not a file already present:
+     { "appId": "com.example.roastbox", "appName": "Da RoastBox", "webDir": "build" }
+5. Implement and test the blockers above. Set REACT_APP_BACKEND_URL at build
+   time to the real separately deployed HTTPS origin (this value is public),
+   for example after replacing the placeholder:
+     $env:REACT_APP_BACKEND_URL = "https://YOUR-ACTUAL-BACKEND-DOMAIN"
+   No placeholder URL will work. Native OAuth/checkout need code changes and
+   backend approval even when API calls work. Do not ship cleartext HTTP.
+6. Build, add Android once, copy web assets and open native project:
+     corepack yarn build
+     corepack yarn cap add android
+     corepack yarn cap sync android
+     corepack yarn cap open android
+   cap add creates frontend/android; do it once. Subsequent changes use build +
+   sync, not add again. Android Studio may download Gradle/SDK dependencies.
+7. In Android Studio select a test emulator/device, press Run and inspect logs.
+   For a debug APK choose Build -> Build APK(s) (menu names vary by version).
+   Typically output is frontend/android/app/build/outputs/apk/debug/app-debug.apk;
+   confirm Studio's notification/path. Install on a consenting test device via
+   Studio or Android Debug Bridge (adb) after installing platform-tools:
+     adb devices
+     adb install -r .\android\app\build\outputs\apk\debug\app-debug.apk
+   Run these in frontend PowerShell with adb on PATH. Verify a device appears;
+   -r replaces that app on the test device. Do not distribute a debug build.
+8. In Android Studio use Image Asset Studio and the current splash-screen
+   guidance to add licensed icons/splash assets; existing web intro is separate.
+9. For signed release: Android Studio Build -> Generate Signed Bundle/APK;
+   create or select a keystore, keep the keystore/password privately backed up,
+   choose APK for direct distribution or Android App Bundle (AAB) for Play.
+   Losing signing keys can prevent updates. Follow Play App Signing guidance;
+   never commit a keystore. Check Studio output path rather than guessing.
+10. Create a Google Play Console account, complete identity, content rating,
+    privacy/data safety, mature content and payments review; upload AAB to an
+    internal test track first. Verify policy and regional payment requirements
+    before launch. There is no guarantee this adult app qualifies for any store.
+
+10. IOS — WEB AND NATIVE
+--------------------------
+On iPhone, a user may open the hosted HTTPS site in Safari and use Share -> Add
+to Home Screen where available. This is not proof of full installable/offline
+PWA support; current project has no verified service worker/manifest. Browser
+and standalone iOS behavior can differ, particularly OAuth and audio autoplay.
+
+Native iOS through Capacitor is a future project, not currently implemented.
+Normal native builds/signing require a Mac with Xcode; Windows alone cannot run
+normal Xcode build/sign/release. Capacitor 8 docs specify Xcode 26+ and iOS 15+;
+check current requirements before building. Install Xcode from the Mac App
+Store and in Terminal run xcode-select --install. Apple Developer account and
+appropriate signing/provisioning are needed for distribution; physical-device
+capabilities depend on Apple account and current rules. Official resources:
+https://capacitorjs.com/docs/ios and https://developer.apple.com/programs/ .
+
+On a Mac, work in the experimental branch after completing Android's web/API
+adaptations and installing matching Capacitor core/CLI. In frontend:
+  corepack yarn add @capacitor/ios@^8
+  corepack yarn build
+  corepack yarn cap add ios
+  corepack yarn cap sync ios
+  corepack yarn cap open ios
+In Xcode select the app target, unique bundle identifier and your signing team;
+let Xcode manage an appropriate development provisioning profile or configure
+one yourself. Run on a simulator, then an authorized physical iPhone. Inspect
+OAuth return, HTTPS, uploads, audio and memory. For release use Product ->
+Archive, validate/sign and upload via Xcode/App Store Connect; distribute to
+internal testers via TestFlight before App Store submission. Plan Apple privacy,
+mature-content and digital-goods compliance; a signed binary is not approval.
+Keep certificates and signing credentials private. Build systems and simulator
+results are NOT VERIFIED for this app.
+
+11. MOBILE FUNCTIONALITY CHECKS
+---------------------------------
+* Touch: select roster, scroll panels, close overlays, rotate, safe areas and
+  small-screen keyboard; test screen reader and reduced motion.
+* Audio: tap to start; test muted device, interrupts, headphones, incoming call,
+  app background/foreground, replay and captions. Background audio is not a
+  guaranteed native feature. The lounge pauses around competing audio sources.
+* Camera: current web file input may allow camera selection where the browser
+  offers it, but no dedicated native camera plugin/permission flow exists.
+  Microphone capture and push notifications are not implemented. Do not add
+  permissions without adding and testing actual features and consent text.
+* Authentication: test callback, app suspension and sign-out in real WebViews.
+  Secure HTTPS, narrow CORS and protect tokens; review sessionStorage behavior.
+* Payments: Stripe is web checkout; native digital-goods payment may need store
+  billing or permitted region-specific programs and server verification. Review
+  current policies; do not assume cross-origin checkout works natively.
+* Offline: no backend/model/database on the phone and no implemented offline
+  generation. Uploaded images, history, voices, login, reels and checkout need
+  network and server. Cached interface/assets are not a data-backup guarantee.
+
+12. PRODUCTION LAUNCH CHECKLIST
+--------------------------------
+[ ] Review consent, age screening, privacy, acceptable use and adult-content law.
+[ ] Build frontend and image successfully; verify site and /api/health via HTTPS.
+[ ] One API worker and one instance; assess reel queue/idempotency/reconciliation.
+[ ] Secure MongoDB, least-privilege credentials, encrypted transport and backups.
+[ ] Persist and back up private media separately; test a full isolated restore.
+[ ] Secure and back up stable JWT_SECRET; keep all secrets out of browser/Git.
+[ ] Disable preview/dev login, hosted preview AI and source download in production.
+[ ] Test managed Google callback and optional email verification/recovery for real.
+[ ] Verify TLS SMTP delivery, SPF/DKIM/DMARC and safe account recovery.
+[ ] Verify Stripe TEST checkout, cancel, signatures, repeat webhook, reconciliation.
+[ ] Verify real AI and voice only with owner approval, budget limits and privacy.
+[ ] Test clean/heat/off-limits and human review; filters are not guarantees.
+[ ] Test audio, image upload, share revocation, reels and billing failure recovery.
+[ ] Test real mobile devices, keyboard, screen reader, reduced motion and HTTPS.
+[ ] Set canonical APP_BASE_URL, restrictive CORS, trusted proxy and secure cookies.
+[ ] Configure monitoring, log redaction, alerts, disk capacity and incident plan.
+[ ] Review provider terms, rights to assets/voices, legal and store requirements.
+[ ] Reconcile historical entitlements and test refunds/chargeback operations.
+[ ] Document and rehearse rollback, restore and owner support procedures.
+
+13. QUICK REFERENCE COMMANDS
+-----------------------------
+WINDOWS POWERSHELL, from project root unless specified:
+  .\install.bat                       install dependencies/config if missing
+  .\start.bat                         start local app; Ctrl+C to stop
+  Invoke-RestMethod http://localhost:8001/api/health
+  .\.venv\Scripts\python.exe backend\scripts\test_roast_showrunner.py
+  .\.venv\Scripts\python.exe backend\scripts\test_voice_leveling.py
+  .\.venv\Scripts\python.exe backend\scripts\test_voice_first_mix.py
+  .\.venv\Scripts\python.exe backend\scripts\verify_workspace.py
+  .\.venv\Scripts\python.exe backend\scripts\test_deployment.py
+  .\.venv\Scripts\python.exe scripts\test_installation.py
+Browser tests need optional dependencies/Chromium and often running preview:
+  .\install.bat --with-browser-tests
+  .\.venv\Scripts\python.exe scripts\test_responsive.py
+  .\.venv\Scripts\python.exe scripts\test_crowd_mix.py
+  .\.venv\Scripts\python.exe scripts\test_mix_heat_preferences.py
+The isolated backend integration scripts require reachable local MongoDB; browser
+scripts may require the preview. Check test docstrings. Legacy tests can contact
+providers: do not run indiscriminately. None of the above is a real provider
+acceptance test. From frontend with global compatible Node/Corepack:
+  corepack yarn install --frozen-lockfile --non-interactive
+  corepack yarn build
+Git:
+  git status
+  git diff --check
+  git switch -c feature/my-change
+  git add <REVIEWED-PATH>
+  git commit -m "Describe change"
+  git push
+  git pull
+Replace placeholders before use; back up uncommitted work before pull.
+For proposed Capacitor on a separate branch, from frontend:
+  corepack yarn build
+  corepack yarn cap sync android
+  corepack yarn cap open android
+Android Studio handles debug and signed builds; adb devices and adb install -r
+are detailed in section 9. These commands only work AFTER implementing the
+native project; none is installed in the current source.
+
+BASH (macOS/Linux), from project root:
+  ./install.sh
+  ./start.sh
+  .venv/bin/python backend/scripts/test_roast_showrunner.py
+  .venv/bin/python backend/scripts/verify_workspace.py
+  curl -fsS http://localhost:8001/api/health
+In frontend, corepack yarn build builds the same production frontend. On macOS,
+Xcode is required for iOS. Detailed setup and current platform requirements:
+https://capacitorjs.com/docs/getting-started/environment-setup .

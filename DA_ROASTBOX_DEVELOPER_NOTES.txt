@@ -1,0 +1,819 @@
+RAP BATTLE UPDATE (2026-11-05)
+Battle offers Classic or Rap, with the existing access, credits, heat, language and boundaries. Rap uses fictional fighter profiles and local portraits; in the two-stage OpenRouter path, OpenAI vision analyzes portraits together with any guest photos in one request, and the writer receives labeled observations, not image bytes. Vision and TTS may incur charges even without a guest photo. The legacy writer receives labeled portrait images directly. No new provider or account is required. An original locally synthesized 90 BPM loop backs spoken TTS; delivery and beat synchronization are approximate, not singing. Voice stays forward with a separate beat slider and ducking; the beat stops with playback and is included in newly rendered rap reels. Old records default to classic. Reels and live provider output have not been end-to-end verified; do not treat mock tests as proof of musical quality. Offline checks: python backend/scripts/test_rap_battle.py and node scripts/test_crowd_timing.js (shell: Bash).
+
+COMEDY STYLES AND PAID CREATIVE PROFILE (supersedes older writer notes)
+The Studio and Battle forms allow several optional comedy lenses; these augment
+existing fictional personas, selected heat, clean/adult mode and boundaries.
+Existing show/beat and speech formats are retained. They are not a standalone
+5–10-joke ranking/favorites product, and there is no new five-level heat scale.
+
+The preview remains on its previously approved FREE writer. Paid creative
+profile is prepared but disabled. To opt in, privately configure the API server:
+ROAST_WRITER_PROFILE=creative and ROAST_FREE_WRITER_ONLY=false, with an
+OpenRouter key and available credits; restart the API without any conflicting
+environment overrides. The default primary is thedrummer/cydonia-24b-v4.1 and
+the backup is cognitivecomputations/dolphin-mistral-24b-venice-edition.
+Mistralai/mistral-uncensored-1.2 was not in the catalog when inspected and is
+not configured. Hermes is not offered as a premium UI option; an administrator
+may investigate selecting a supported model through the model environment
+variables. Free-only mode blocks paid model IDs. Pollinations and Emergent
+fallbacks remain separately controlled by their existing flags; review privacy
+and cost before enabling them.
+
+Creative requests impose OpenRouter provider per-million-token rate ceilings
+configured with ROAST_MAX_INPUT_USD_PER_M and ROAST_MAX_OUTPUT_USD_PER_M.
+These are NOT an account or daily dollar spending cap. Configure OpenRouter
+key-level budget/guardrail and provider limits separately. The existing preview
+show/voice counters are attempt limits, not spending caps. A primary timeout
+gets at most one explicit retry; a timed-out request may already be billable.
+Output extraction handles some malformed JSON locally; it is not a guaranteed
+repair or a paid rewrite. Model latency and usage/cost are logged when returned
+without prompts or secrets; missing provider cost is unknown, not zero. Photo
+vision and TTS can bill separately. No live provider or 20-prompt paid benchmark
+was run; model availability, quality, retries and costs must be verified before
+production. User-supplied OpenAI/ElevenLabs credentials still take precedence.
+
+SPLASH AND RESPONSIVE UPDATE: After the skippable Hustler Anomalies intro,
+a compact bottom-docked disclaimer dialog requires the 18+ checkbox before
+Enter the Roast. It contains no lounge control. Enter opens a separate centered
+sign-in dialog for signed-out users. The lounge remains available inside the
+account menu. Intro audio has a locally generated impact; browsers may block
+autoplay, in which case use Replay with sound. No sound plays on reduced-motion
+intro by default. Direct links retain their consent gate. Layout and controls
+were tested in emulated viewport sizes; real physical devices remain unverified.
+
+SHOW DRAFT LIFETIME: Studio and Battle selections, text, heat, duration,
+toggles and crowd volume are held per signed-in user and browser tab for the
+session; they survive in-app navigation and ordinary reloads. Logout, an
+expired session or account switch clears them. Uploaded photo files stay
+only in browser memory across in-app navigation and must be selected again
+after a page reload or tab close; they are never written to browser storage.
+Unsaved API key fields are intentionally not retained across navigation.
+
+UPDATE — FREE WRITER, OPTIONAL FALLBACKS (supersedes earlier provider notes)
+When ROAST_WRITER_PROVIDER=openrouter, the default writer model is
+ROAST_WRITER_MODEL=google/gemma-4-31b-it:free; the second free model is
+ROAST_FREE_BACKUP_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free. Free model
+availability, quality, filtering and limits can change. These are not verified
+uncensored models. Free-only mode (ROAST_FREE_WRITER_ONLY=true) rejects model
+IDs without :free before generation. Optional ROAST_POLLINATIONS_FALLBACK=true
+adds a no-signup, rate-limited, best-effort text fallback; it can receive the
+name, context, boundaries, and photo observations, but not photo files or keys.
+It may cache responses. Inform end users; avoid sensitive information.
+OpenAI or Emergent still analyzes photos and supplies speech and MAY CHARGE;
+AI_DEFAULT_PROVIDER=openai selects OpenAI for hosted vision/speech where
+configured, while user OpenAI/ElevenLabs BYOK retains precedence. Writer
+fallbacks do not repair a failed vision or TTS call. Emergent's writer fallback
+is preserved but runs only if ROAST_FREE_WRITER_ONLY=false and
+ROAST_ALLOW_PAID_WRITER_FALLBACK=true; it can charge. To use a paid writer
+later, set ROAST_FREE_WRITER_ONLY=false and ROAST_WRITER_MODEL to the desired
+model; restart the API. Put all keys only in private server configuration.
+No provider can be guaranteed always available. Live generation was NOT tested;
+only offline mocks were run. Preview hosted AI is separately disabled unless
+explicitly enabled and budgeted, even if a user supplies an OpenAI BYOK key.
+
+DA ROASTBOX — DEVELOPER NOTES
+Complete architecture, source code, service and technical reference
+Audit date: 2026-11-04. Paths are relative to the folder containing this file.
+==========================================================================
+
+READ THIS FIRST
+This is a source-code audit, not a claim of production certification. A
+frontend is the interface in the browser. A backend is the server that checks
+requests, talks to providers and stores records. An API is a defined way for
+programs to communicate. A dependency is a package the app uses. An environment
+variable is a setting supplied to a running process. An integration marked
+"implemented" means code exists, not that a provider account is configured or
+that it was verified on the target host. Do not copy real passwords, keys,
+MongoDB URIs, tokens, customer data or screenshots of them into tickets.
+
+Related manuals in this directory:
+* DA_ROASTBOX_AI_ROAST_GENERATION_GUIDE.txt — writing and performance pipeline.
+* DA_ROASTBOX_INSTALL_BUILD_DEPLOYMENT_MANUAL.txt — beginner operations/mobile.
+Source references: README.md and docs/ARCHITECTURE.md, API.md, DEPLOYMENT.md,
+INTEGRATIONS.md, LOCAL_INSTALL.md and PERSONAS.md. When these differ from code,
+reinspect code and tests; documentation is a snapshot.
+
+1. PROJECT OVERVIEW AND DATA FLOW
+---------------------------------
+Da RoastBox is an adult-oriented React web application for selecting fictional
+roasters, uploading subject photographs and context, generating voiced roast
+shows or two-persona battles, playing a theater presentation, sharing a show,
+and rendering vertical highlight reels. It also provides a persona catalog,
+favorites, previews, credit packs and add-ons, account history, optional email
+login, managed Google login, a cinematic intro and an illustrated developer
+storybook. Clean/adult and heat controls, boundary text and entitlements exist.
+40 catalog personas: 25 free and 15 premium as of this inspection.
+
+Frontend: React 19, React Router 7, CRA/react-scripts 5 plus CRACO 7, JavaScript,
+CSS and some Radix/Tailwind utilities. Backend: Python FastAPI with Pydantic,
+Uvicorn, Motor/PyMongo for MongoDB, Pillow, imageio-ffmpeg and NumPy. An
+OpenAI-compatible chat gateway supplies scripts; ElevenLabs/OpenAI TTS supply
+speech. MongoDB stores records; local or Emergent object storage stores files.
+Real provider access can cost money. A mock test does not prove joke quality,
+live service health, safe content, or physical-device behavior.
+
+Browser -> React forms -> Axios frontend/src/lib/api.js -> /api -> FastAPI
+backend/server.py -> routes -> validation/access/pricing -> AI writer -> TTS
+-> storage + MongoDB -> transcript/media URLs -> browser theater/crowd audio.
+Share URLs use a separate revocable public scope; reels render from existing
+show media. No server-side image generation or 3D character renderer is part
+of the runtime. See the AI manual for precise processing and limitations.
+
+2. DIRECTORY MAP
+----------------
+Actual important folders (generated directories may be absent in a source ZIP):
+
+  project root/
+  |-- README.md, install.py, install.bat, install.sh, start.bat, start.sh
+  |-- Dockerfile, render.yaml, .gitignore, .dockerignore
+  |-- backend/
+  |   |-- server.py, config.py, db.py, models.py, auth_deps.py, crypto_utils.py
+  |   |-- .env.example, requirements.txt, requirements.exported.txt
+  |   |-- data/personas.json
+  |   |-- routes/      API routers, one area per module
+  |   |-- services/    writing, speech, storage, pricing, reel and sessions
+  |   |-- assets/      bundled persona art and crowd effects for reels
+  |   |-- scripts/     offline checks and OPTIONAL asset-generation utilities
+  |   |-- tests/       original integration tests; inspect before running
+  |   |-- audio_cache/ transient audio/master cache, not source (runtime)
+  |   `-- local_storage/ private media default, not source (runtime)
+  |-- frontend/
+  |   |-- package.json, yarn.lock, craco.config.js, .env.example
+  |   |-- public/      static site assets, callback, intro, personas, audio
+  |   `-- src/
+  |       |-- index.js, App.js, index.css, App.css, setupProxy.js
+  |       |-- pages/   route-level views
+  |       |-- components/ studio/, theater/, ui/ and reusable components
+  |       |-- hooks/   useShowPlayer and persisted browser state
+  |       |-- lib/     API, auth, consent, lounge, crowd and media utilities
+  |       |-- styles/  page/panel-specific CSS
+  |       |-- data/    author story text; assets/fonts/ holds local fonts
+  |       `-- constants/testIds/ stable selectors for tests
+  |-- docs/            architecture, API, deployment and local setup references
+  |-- scripts/         installer helpers, safe package exporter, browser tests
+  |-- deploy/          Docker entrypoint
+  |-- tests/           top-level test package; see actual files before running
+  |-- .venv/, .cache/, .data/   local tools/database, if installed; not source
+  `-- test_reports/, memory/     workspace artifacts; may contain private data
+
+Do not edit files under node_modules, frontend/build, .venv, .cache or
+__pycache__. Back up .data and local_storage privately; they can contain user
+content. Never publish .env, generated customer media, databases, logs or
+workspace memory. backend/data/personas.json is loaded into memory at backend
+startup; restart the API after changing it. Public portraits are separate from
+backend/assets/personas used by rendering; check both when adding a character.
+The actual static assets under frontend/public/assets also include intro,
+background/storybook audio and images. Preserve ownership and usage rights.
+
+3. FRONTEND ARCHITECTURE
+-------------------------
+frontend/src/index.js mounts React. frontend/src/App.js wraps the router in
+AuthProvider, ConsentProvider, LoungeProvider, ToastProvider and
+PersonaFavoritesProvider. It defines /, /auth/callback, /auth/verify,
+/auth/reset, /studio, /credits, /credits/success, /credits/cancel, /settings,
+/roasters, /battle and /r/:shareId. Protected checks login and consent;
+client-side 18+ consent is stored in sessionStorage, not verified age and not a
+server-enforced or durable consent record. Obtain legal/security review.
+
+Main pages and where to change them:
+* frontend/src/pages/SplashScreen.jsx — landing/login; CinematicIntro.jsx and
+  AdultConsent.jsx supply opening and age prompt.
+* frontend/src/pages/StudioPage.jsx — roster, subject name, anecdotes, up to
+  four images, off-limits, controls, pricing, submit, show history and theater.
+* frontend/src/pages/BattlePage.jsx — two opponents, access, form, scores.
+* frontend/src/pages/RoastersPage.jsx — catalog; components/PersonaBrowser.jsx,
+  PersonaProfileDialog.jsx and PersonaFavoriteButton.jsx are reused.
+* frontend/src/pages/CreditsPage.jsx, CheckoutSuccess.jsx, CheckoutCancel.jsx —
+  packs and return flow. AccountMenu.jsx shows recent account activity.
+* frontend/src/pages/SettingsPage.jsx — provider keys, diagnostics.
+* frontend/src/pages/SharePage.jsx — public show; components/ShareButton.jsx,
+  ReelButton.jsx and ShowTranscript.jsx support studio sharing/rendering.
+* frontend/src/pages/AuthCallback.jsx, EmailTokenPage.jsx and
+  components/EmailAuthDialog.jsx — external callback and email flows.
+* frontend/src/components/studio/HeatControls.jsx, HotSeatForm.jsx,
+  RosterPicker.jsx and StepPanel.jsx — form building blocks.
+* frontend/src/components/theater/RoastTheater.jsx and
+  frontend/src/hooks/useShowPlayer.js — introductions, one active caption,
+  media, pauses, reactions, replay, crowd slider and failure fallback.
+* frontend/src/components/AboutAuthor.jsx and frontend/src/data/authorStory.js —
+  storybook. frontend/src/components/AccountMenu.jsx and TopBar.jsx — shell.
+
+frontend/src/lib/api.js is the Axios client. Same-origin /api is preferred; in
+local CRA development frontend/src/setupProxy.js forwards it to the backend.
+frontend/src/lib/media.js fetches protected audio/image/video as blob URLs;
+frontend/src/lib/sessionStore.js and AuthContext.jsx manage session fallback.
+frontend/src/lib/crowdEngine.js uses browser Web Audio; audioFocus.js and
+LoungeContext.jsx coordinate lounge, storybook, sample, show and reel audio.
+usePersisted.js uses localStorage for preferences; AuthContext handles loading,
+errors and login; page components handle request errors and busy states. Avoid
+storing secrets in React build variables or browser logs. Blob URLs are revoked
+by callers. Browser autoplay may require a user gesture.
+
+frontend/src/index.css contains root palette/layout. frontend/src/styles/v8.css,
+personas.css, about-author.css, account-menu.css, consent.css, landing.css,
+email-auth.css, cinematic-intro.css and lounge.css are scoped UI styles.
+App.css and tailwind.config.js/craco.config.js also affect presentation/build.
+Responsive breakpoints and accessibility exist but must be tested on real
+phones, keyboard and screen readers. components/ui/ contains reusable UI
+primitives; change an app-specific wrapper before altering a shared primitive.
+
+4. BACKEND AND REQUESTS
+------------------------
+backend/server.py creates the FastAPI app, includes routers under /api, starts
+indexes/storage and recovery, optionally serves the compiled SPA from
+FRONTEND_BUILD_DIR, and exposes authenticated /api/audio/{filename}. CORS comes
+from CORS_ORIGINS. Uvicorn is the HTTP server. One worker/instance is mandatory
+with the current reel recovery design. services/roast_engine.py validates image
+uploads, normalizes via Pillow, checks credits/entitlements, commits records
+and recovers interrupted generations. routes/roast.py and routes/battle.py
+orchestrate; services/roast_writer.py builds prompts, calls and parses AI;
+voice_orchestrator.py synthesizes; storage.py persists media; audio_mastering.py
+levels playback; highlight_reel.py renders video. services/pricing.py defines
+credit cost. Logs and friendly errors are in these files; never log private
+photos, user inputs, session tokens, credentials or full provider responses.
+
+Background work: routes/reels.py launches an in-process render task and has
+startup recovery; it is NOT a durable distributed job queue. Payment, reel and
+show marker/ledger recovery does not provide end-to-end request idempotency.
+Do not retry a timed-out generation blindly: check recent shows first. For
+production, implement a durable ownership-aware queue, request idempotency and
+financial reconciliation before scaling or taking live payments.
+
+API reference: all paths below begin /api. Use GET /api/health for a free
+liveness test and GET /api/diagnostics for a shallow config/Mongo check.
+/api/diagnostics?deep=true and diagnose.py --deep contact providers and can
+incur charges. For request schemas and response field details inspect the
+actual handler, backend/models.py, docs/API.md or local FastAPI /docs. Auth
+uses app session cookie or header; don't paste live session tokens in URLs.
+The table lists method, endpoint, owner/source, input -> output, calling UI and
+test. For authenticated rows use the UI or isolated mocked suite, not a real
+customer account. Fixture test = backend/scripts/verify_workspace.py unless
+otherwise specified; endpoint failure/status details in docs/API.md.
+
+METHOD + ENDPOINT | handler file | input -> result | caller / no-cost test
+GET /api/ | backend/server.py | none -> version message | curl or browser.
+GET /api/health | backend/routes/diagnostics.py | none -> liveness/version |
+  installer / browser GET; does not guarantee dependencies are healthy.
+GET /api/diagnostics | backend/routes/diagnostics.py | optional deep flag ->
+  status/checks | SettingsPage.jsx; shallow GET; deep calls live providers.
+POST /api/auth/session | backend/routes/auth.py | session_id -> app session,
+  user | AuthContext.jsx/AuthCallback.jsx; mock Google suite.
+GET /api/auth/me | backend/routes/auth.py | session -> profile | AuthContext;
+  fixture test or signed-in browser. POST /api/auth/logout | same file | session
+  -> status | AuthContext; fixture. POST /api/auth/preview-login | same | no
+  body -> isolated guest | AuthContext; enabled only in private preview.
+POST /api/auth/dev-login | same | test email -> session | no normal UI; disabled
+  unless explicitly flagged. Never enable on production data.
+GET /api/auth/email/status | backend/routes/email_auth.py | none -> capability |
+  EmailAuthDialog. POST /api/auth/email/register | same | email -> generic 202;
+POST /api/auth/email/verify | same | token,password -> account/session;
+POST /api/auth/email/login | same | email,password -> session;
+POST /api/auth/email/forgot | same | email -> generic 202;
+POST /api/auth/email/reset | same | token,password -> status and revoked prior
+  sessions. EmailAuthDialog, EmailTokenPage and AuthContext; test with
+  backend/scripts/test_email_auth.py (SMTP/Google mocked). Live mail unverified.
+GET /api/personas | backend/routes/personas.py | optional user -> catalog/access |
+  StudioPage, BattlePage, RoastersPage; curl returns public catalog.
+GET /api/personas/favorites; PUT or DELETE /api/personas/favorites/{persona_id}
+  | same | signed-in user + ID -> saved list/status | PersonaFavoritesContext;
+  fixture/browser scripts/test_persona_browser.py.
+GET /api/personas/{persona_id}/voice-preview?sample=0 | same | sample index ->
+  audio URL | PersonaProfileDialog; uncached sample can call paid TTS, so use
+  mocks. Cache hit can be public; generating an uncached sample needs auth.
+GET /api/roast/cost-quote | backend/routes/roast.py | tier and flags -> cost |
+  StudioPage; fixture. POST /api/roast/generate | same | multipart roster,
+  image(s), context, heat and flags -> show/transcript/media/credit balance |
+  StudioPage; fixture only. GET /api/roast/history | same | session -> latest
+  50 | StudioPage/AccountMenu; fixture.
+POST /api/roast/{roast_id}/share and DELETE same | same | owner + ID -> create
+  or revoke share | ShareButton (create); fixture tests cover authorization.
+GET /api/audio/{filename} | backend/server.py | owner or public catalog-preview
+  filename -> audio/mpeg | theater / preview via media.js; fixture. Owner audio
+  is NOT a public file URL. Unauthorized or missing returns 404.
+GET /api/battle/access | backend/routes/battle.py | session -> access/cost |
+  BattlePage; fixture. POST /api/battle/generate | same | multipart fighters,
+  rounds, optional images/context/boundaries and controls -> transcript,
+  scores and winner | BattlePage; fixture/mocked provider. Battle requires an
+  entitlement. Images are optional for battle, required for roast.
+GET /api/payments/packs | backend/routes/payments.py | none -> catalog |
+  CreditsPage. GET /api/payments/activity | same | session -> recent activity |
+  AccountMenu. POST /api/payments/checkout | same | pack_id, origin_url ->
+  Stripe checkout URL | CreditsPage. GET /api/payments/status/{session_id} |
+  same | owner + ID -> payment status | CheckoutSuccess. POST
+  /api/payments/webhook | same | signed Stripe event -> acknowledgement |
+  Stripe, not a frontend page. Use mocked payment tests; real checkout requires
+  Stripe test credentials, webhook and owner permission.
+POST /api/voice-settings/keys and DELETE same | backend/routes/voice_settings.py |
+  session and optional OpenAI/ElevenLabs key(s), or clear -> status |
+  SettingsPage; test with dummy keys in isolated DB, never print real keys.
+GET /api/share/{share_id} | backend/routes/share.py | active share ID -> public
+  transcript and scoped media | SharePage. GET /api/share/{share_id}/audio/{index}
+  and GET /api/share/{share_id}/images/{index}.jpg | same | active share + index -> media | theater via
+  media.js; test with mock share and revocation fixture. A valid share is public
+  to anyone who has the link; revocation prevents future access, not downloads.
+POST /api/roast/{roast_id}/reel | backend/routes/reels.py | owner + JSON length
+  30 or 60 -> job/status | ReelButton. GET /api/reels/{reel_id} | same | owner
+  + ID -> status; GET /api/reels/{reel_id}/video.mp4 | same | owner + optional
+  download -> video; GET /api/media/subject/{roast_id}/{index}.jpg | same |
+  owner + index -> image | theater/media.js. Use isolated fixture/reel smoke;
+  rendered duration is an upper limit and may be shorter.
+GET /api/download/source.zip | backend/routes/download.py | none -> safe source
+  ZIP when ALLOW_SOURCE_DOWNLOAD enabled | optional UI; normally disabled.
+POST /api/session/dispatch | backend/routes/session_tunnel.py | authenticated
+  token, method/path/body -> internal response | frontend/src/lib/api.js when
+  restricted proxies strip auth headers. Body contains a credential: protect
+  HTTPS and disable body logging. Do not expose as arbitrary proxy; re-audit
+  allowlist on changes.
+
+5. SERVICE DIRECTORY AND STATUS
+--------------------------------
+Service | actual code and purpose | credentials / status / safe check
+OpenAI-compatible API | backend/services/openai_service.py get_client and
+ roast_writer.py write_script; openai_service.py synthesize_tts_openai |
+ OPENAI_API_KEY or per-user BYOK; code implemented; real current account and
+ quota NOT VERIFIED. Model/TTS calls may be billed. Local mock tests only.
+Emergent LLM gateway | same files; _GATEWAY_URL; can route named Claude and GPT
+ models via OpenAI-compatible interface | EMERGENT_LLM_KEY. Availability,
+ model support, billing and limits depend on provider; NOT VERIFIED live.
+ Direct Anthropic SDK integration is NOT present; Claude name here is routed
+ through gateway, not evidence of a configured direct Anthropic account.
+ElevenLabs | services/elevenlabs_service.py and voice_orchestrator.py; optional
+ ELEVENLABS_API_KEY or user key, persona voice IDs; hosted use gated by premium
+ voice entitlement | API subscription/voice permissions vary; real account NOT
+ VERIFIED; fallback to OpenAI. Catalog cache means sample can be stale.
+Emergent object storage | services/storage.py init_storage/_put/_get; configured
+ by STORAGE_BACKEND=emergent, INTEGRATION_PROXY_URL, EMERGENT_LLM_KEY |
+ implemented, external durability NOT VERIFIED. Alternative local storage
+ requires persistent disk and separate backup.
+Managed Google sign-in | frontend/src/lib/AuthContext.jsx and backend/routes/
+ auth.py exchange a managed Emergent OAuth session; no independent Google
+ OAuth client integration is configured here | external provider must permit
+ actual callback/origin; real account and deployment NOT VERIFIED.
+SMTP | services/email_auth.py and routes/email_auth.py | optional TLS SMTP and
+ APP_BASE_URL, EMAIL_AUTH_ENABLED; real delivery NOT VERIFIED; mocked tests only.
+Stripe | routes/payments.py and emergentintegrations Stripe checkout wrapper |
+ STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET; STRIPE_TEST_ONLY recommended; one-time
+ hosted checkout and signed webhook; real checkout/webhook NOT VERIFIED.
+MongoDB | backend/db.py Motor, models.py and pymongo | MONGO_URL, DB_NAME;
+ local integration tests pass with Mongo; remote/Atlas NOT VERIFIED.
+FFmpeg | imageio-ffmpeg binary, services/highlight_reel.py and audio_mastering.py
+ | local process, no API key; synthetic/offline tests; real loudness varies.
+When Emergent audio upload fails, storage.save_audio currently logs a warning
+and keeps a local cache copy; that is not a durable upload guarantee. Check
+external storage availability and test persistence before relying on it.
+Asset-generation utilities | backend/scripts/generate_crowd_sfx.py and
+ generate_persona_portraits.py call external generation services and may cost;
+ they are not invoked by normal show generation. Bundled assets are used.
+Social links | frontend/src/components/AccountMenu.jsx links to generic social
+ home pages; not connected posting APIs or verified official accounts.
+
+Packages in requirements.txt (including Google AI SDK, Hugging Face and boto3)
+do not prove their APIs are wired into runtime. Firebase, Twilio, direct Gemini,
+Hugging Face inference and AWS S3 adapters were not found as implemented
+runtime integrations in this audit. To add a provider, implement an explicit
+adapter with private configuration, request/response normalization, timeouts,
+error handling and mocked contract tests; route through the existing services.
+Never silently switch providers, incur extra calls, or log secrets.
+
+6. CONFIGURATION AND SECRET REFERENCE
+--------------------------------------
+backend/config.py loads backend/.env using python-dotenv; existing process
+variables normally win. backend/.env.example is a non-secret template. The
+installer creates missing .env files but never overwrites existing settings.
+frontend/.env.example is public/build configuration: REACT_APP_* values are
+compiled into browser code, never credentials. Cloud environment settings are
+secrets stored in the host's dashboard; file settings on your computer are not
+automatically copied there. Same-origin /api eliminates most CORS needs.
+
+Variable | role, required/condition, source, development -> production
+MONGO_URL | required private Mongo URI; DB vendor/administrator; local private
+ server -> Atlas/secured MongoDB with TLS and network restriction; config.py.
+DB_NAME | required database name; operator chooses -> dedicated prod DB;
+ backend/config.py, db.py. Do not point test scripts at production data.
+JWT_SECRET | required long random persistent secret; generated by installer or
+ Render; config.py/crypto_utils.py. Back up securely; rotating invalidates key
+ decryption/session continuity; plan migration, never publish.
+EMERGENT_LLM_KEY | optional hosted gateway/storage credential from Emergent;
+ config.py, openai_service.py, storage.py; blank locally until authorized.
+OPENAI_API_KEY | optional direct hosted AI/TTS if Emergent key absent; OpenAI
+ dashboard; config.py/openai_service.py. User BYOK takes precedence.
+ELEVENLABS_API_KEY | optional hosted premium TTS from ElevenLabs dashboard;
+ config.py/voice_orchestrator.py. User BYOK can override.
+INTEGRATION_PROXY_URL | optional Emergent storage base; config.py/storage.py;
+ default provider integration endpoint; leave default unless provider directs.
+TTS_MODEL | optional OpenAI TTS model; config.py/openai_service.py; default
+ gpt-4o-mini-tts; tts-1 fallback has reduced acting control.
+STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET | optional unless accepting payments;
+ Stripe dashboard; config.py/routes/payments.py; test keys and matching webhook
+ secret in staging; private production credentials only after intentional launch.
+STRIPE_TEST_ONLY | payment safety switch; sample and Blueprint true; keep true
+ until approved live launch, config.py/routes/payments.py.
+CORS_ORIGINS | comma-separated exact allowed browser origins; config.py and
+ server.py. Local template allows localhost:3000; prod use same-origin or only
+ trusted HTTPS origins. No wildcard with credentials.
+APP_BASE_URL | exact public HTTPS frontend origin for checkout/email links;
+ config.py. For Render RENDER_EXTERNAL_URL is fallback; override custom domain.
+FRONTEND_BUILD_DIR | optional filesystem path containing index.html; server.py;
+ Docker uses /app/frontend/build; unset for separate development frontend.
+STORAGE_BACKEND | local or emergent; config.py/services/storage.py. Local is
+ useful in development; production requires durable private storage.
+LOCAL_STORAGE_DIR | private persistent path for local backend; config.py; default
+ backend/local_storage, Blueprint /var/data/roastbox.
+VOICE_LEVELING_ENABLED | true by default; config.py/audio_mastering.py; set false
+ to bypass local master. VOICE_TARGET_RMS_DBFS default -19; bounded -27..-16.
+EMAIL_AUTH_ENABLED | optional false default; config.py/routes/email_auth.py.
+SMTP_HOST, SMTP_PORT, SMTP_TLS_MODE, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM |
+ provider's private TLS SMTP configuration, services/email_auth.py; port 587
+ starttls or 465 ssl; verified sender, credentials when required, APP_BASE_URL.
+ENABLE_PREVIEW_LOGIN, ALLOW_DEV_LOGIN | unsafe outside disposable development;
+ config.py/routes/auth.py. Keep both false on production. Preview cannot buy.
+ALLOW_PREVIEW_HOSTED_AI | default false; explicitly enables billable hosted AI
+ in private preview; config.py/services/preview_budget.py. Limits are counts,
+ not cost ceilings. PREVIEW_HOSTED_DAILY_SHOW_LIMIT (default 5) and
+ PREVIEW_HOSTED_DAILY_VOICE_LIMIT (default 10) are UTC daily attempt limits.
+ALLOW_SOURCE_DOWNLOAD | off unless deliberately allowing sanitized source export;
+ config.py/routes/download.py; keep false in production.
+REACT_APP_BACKEND_URL | public frontend API origin, frontend/src/lib/api.js;
+ empty for same-origin; absolute HTTPS origin for explicitly separate backend.
+REACT_APP_ENABLE_PREVIEW_LOGIN, REACT_APP_SOURCE_DOWNLOAD_ENABLED | public build
+ flags in SplashScreen.jsx; corresponding server flags must also allow feature.
+REACT_APP_SUPPORT_EMAIL | optional PUBLIC contact email, AccountMenu.jsx; no
+ actual address is supplied by default. Public values require frontend rebuild.
+API_PROXY_TARGET | dev-server-only URL in frontend/src/setupProxy.js; launcher
+ sets to local API port, default http://127.0.0.1:8001; not a browser address.
+API_PORT, PORT | scripts/local_start.py chooses API 8001/UI 3000; Docker PORT
+ selects hosted service port, default 10000. Choose unused local ports.
+DISABLE_EMERGENT_OVERLAY, ENABLE_HEALTH_CHECK, ENABLE_VISUAL_EDITS |
+ frontend/craco.config.js build/dev switches; leave defaults unless auditing
+ tooling; never treat as authentication or production security controls.
+NODE_ENV, PUBLIC_URL, INLINE_RUNTIME_CHUNK | CRA/build tooling; avoid changing
+ without checking build and routing. RENDER_EXTERNAL_URL is host-supplied.
+Additional build flags GENERATE_SOURCEMAP, CI, NODE_OPTIONS are in Dockerfile;
+ they are build behavior, not provider credentials. The asset-generation scripts
+ have their own optional job_id input. Standard system PATH and Python/Node
+ variables may also apply; they are not application secrets.
+
+7. DATABASE, MEDIA, BACKUPS AND STATUS
+---------------------------------------
+backend/db.py uses Motor AsyncIOMotorClient and creates indexes at startup.
+Collections: users (credits, entitlements, encrypted BYOK, favorites), sessions
+(revocable), roasts (context, transcript, media references, billing markers),
+credit_transactions, payment_transactions, voice_previews,
+voice_preview_samples, voice_preview_leases, reels, preview_hosted_usage,
+email_credentials, email_tokens, email_auth_rate_limits. Pydantic structures:
+User, Session, CreditTransaction, PaymentTransaction, RoastRecord in
+backend/models.py; reel/job and auth documents also originate in route code.
+TTL indexes on email token/rate-limit and voice lease expiry; user history and
+media do NOT have a verified automatic full-deletion policy. Audio read cache is
+pruned after seven days at startup; durable originals are separate. Do not claim
+this deletes customer data. Design explicit retention/deletion and compliance.
+
+backend/services/storage.py writes private subject images, audio and reels to
+local storage or Emergent object storage. /api enforces owner or active-share
+scope; do not expose backing disk/bucket directly. Local photo input is bounded
+by read_images: at most 4, 8 MiB each, 25 million source pixels, normalized to
+JPEG max 1280 pixels and metadata removed. Media and Mongo are separate backups.
+Use database provider's encrypted backup/PITR tools and a separately encrypted
+copy of persistent media; protect JWT_SECRET independently. Test a full restore
+in an isolated environment. No automated migration framework was found: version
+schema changes, back up first, write reversible migration and test against a
+copy; preserve existing IDs, shares, transaction markers and encryption key.
+See deployment manual for non-destructive backup procedure.
+
+Status: core code, bundled art/voice storybook, mocks and offline regressions
+exist. Provider configuration, live Google OAuth, real SMTP delivery, real Stripe
+webhooks/checkout, a live deployment, adult consent/legal sufficiency and real
+mobile-device runs remain NOT VERIFIED. No store-ready app, native 3D engine,
+fully reliable semantic content filter, auto-renewing subscription, durable
+multi-worker queue or production monitoring/restore service is implemented.
+Older purchase entitlements may need reconciliation. Preview accounts are
+isolated demonstrations; provider calls are disabled unless allowed/BYOK.
+
+8. TROUBLESHOOTING LOOKUP
+--------------------------
+App won't start -> install.py, scripts/local_start.py, .data/mongo-27017.log;
+ check versions, port conflicts and missing config without displaying secrets.
+Browser/API connection -> frontend/src/lib/api.js, setupProxy.js, server.py;
+ check origin, proxy target, /api/health, browser console, CORS.
+Login -> frontend/src/lib/AuthContext.jsx, backend/routes/auth.py,
+ auth_deps.py, services/app_sessions.py; check managed callback, session, flags.
+Email -> routes/email_auth.py/services/email_auth.py; check TLS SMTP, sender,
+ APP_BASE_URL and test mailbox; do not print tokens.
+Persona -> data/personas.json, routes/personas.py, PersonaBrowser.jsx; check
+ unique ID, image path, restart server, tier and cached preview version.
+Roast -> routes/roast.py, roast_engine.py, roast_writer.py; check image limits,
+ access, quota, provider config, parse/validation; inspect safe error logs.
+Battle -> routes/battle.py and BattlePage.jsx; check entitlement, distinct IDs,
+ form and mock tests. Prompt and clean/boundary settings remain independent.
+Voice -> voice_orchestrator.py, elevenlabs_service.py, openai_service.py,
+ audio_mastering.py, server.py, media.js and useShowPlayer.js; check provider
+ quota/permissions, auth, autoplay, decode, file availability, browser volume.
+Laughter/loudness -> crowdEngine.js, RoastTheater.jsx, useShowPlayer.js,
+ audio_mastering.py and highlight_reel.py. Ducking is not a guarantee across
+ devices; use offline mix tests and real-device listening with permission.
+Photo -> roast_engine.py, storage.py, routes/reels.py and media.js; verify JPEG,
+ size, authorization and durable storage, not a public static path.
+Share -> routes/share.py and ShareButton.jsx; verify active share and scoped
+ index. A revoked link cannot recall content already downloaded by a recipient.
+Reel -> routes/reels.py/highlight_reel.py/ReelButton.jsx; check FFmpeg, disk,
+ job state and refunds. Never start a second worker against active jobs.
+Payment -> routes/payments.py, services/pricing.py, CreditsPage.jsx; use Stripe
+ test mode, verify signature/webhook/session, reconcile ledgers before retry.
+Theme/mobile -> index.css, styles/* and responsive browser tests; test real
+ phone/screen reader. Intro/book -> CinematicIntro.jsx, AboutAuthor.jsx,
+ respective styles and public assets; check autoplay and audio focus.
+
+9. SAFE DEVELOPMENT WORKFLOW
+------------------------------
+1. Make an encrypted backup of source, database, media and JWT_SECRET separately.
+2. Use a disposable non-production database, media path and test credentials.
+3. In PowerShell open project root; use git status. If no repository exists,
+   follow the installation manual's first-time Git steps and inspect .gitignore.
+4. Create a branch: git switch -c feature/my-change
+5. Change a small coherent area. Never edit .env.example to include real keys.
+6. Run focused no-cost tests from the other manuals; then production build and
+   an isolated end-to-end check. Review tests before running unknown suites.
+7. Review: git status; git diff; git diff --check. Stage only reviewed files.
+8. Commit: git add <reviewed-path>; git commit -m "Describe the change"
+9. Roll back source by checking out a known commit/branch into a separate
+   directory; never run git reset --hard on unbacked work. Database/media must
+   be restored separately; test restore before touching live systems.
+
+10. EXPANSION MAP
+------------------
+New models: openai_service.py + roast_writer.py, normalized adapter and mocked
+fallback. New voices: voice_orchestrator.py and a new service adapter; keep
+storage/audio contract. Persona: personas.json, both portrait locations and
+catalog/UI tests. New comedy modes: route + writer builder + page/router +
+access/pricing/tests. Add categories only after defining UI/API/data schema;
+none exists as a separate general category system now. Images/video/3D and
+animations: future modules, not active implementations; respect uploaded-media
+privacy and explicit cost approvals. Battle already exists in routes/battle.py.
+New payments: route adapter, signature validation, idempotency, ledger,
+reconciliation, refunds, provider contract and store-policy/legal review.
+Reuse established authorization, private storage and session handling; do not
+circumvent clean, heat, off-limits or entitlements when extending any feature.
+
+APPENDIX A — ACTUAL SOURCE FILE INVENTORY
+------------------------------------------
+The following is the inspected source/config tree. Private configuration,
+user data, dependencies, caches, generated builds, reports and workspace
+memory are intentionally omitted. Asset folders are summarized rather than
+printing every binary filename; inspect them in a file browser.
+  ./
+    .dockerignore
+    .gitignore
+    Dockerfile
+    README.md
+    install.bat
+    install.py
+    install.sh
+    render.yaml
+    requirements-test.txt
+    start.bat
+    start.sh
+    test_result.md
+    yarn.lock
+  backend/
+    .env.example
+    auth_deps.py
+    config.py
+    crypto_utils.py
+    db.py
+    frontend_static.py
+    models.py
+    pytest.ini
+    requirements.exported.txt
+    requirements.txt
+    server.py
+  backend/assets/fonts/ — 2 bundled asset file(s)
+  backend/assets/personas/ — 40 bundled asset file(s)
+  backend/assets/sfx/ — 14 bundled asset file(s)
+  backend/data/
+    personas.json
+  backend/routes/
+    __init__.py
+    auth.py
+    battle.py
+    diagnostics.py
+    download.py
+    email_auth.py
+    payments.py
+    personas.py
+    reels.py
+    roast.py
+    session_tunnel.py
+    share.py
+    voice_settings.py
+  backend/scripts/
+    diagnose.py
+    generate_crowd_sfx.py
+    generate_persona_portraits.py
+    test_deployment.py
+    test_email_auth.py
+    test_reel_streaming.py
+    test_roast_showrunner.py
+    test_voice_first_mix.py
+    test_voice_leveling.py
+    verify_workspace.py
+  backend/services/
+    __init__.py
+    app_sessions.py
+    audio_mastering.py
+    elevenlabs_service.py
+    email_auth.py
+    highlight_reel.py
+    openai_service.py
+    preview_budget.py
+    pricing.py
+    roast_engine.py
+    roast_writer.py
+    storage.py
+    voice_orchestrator.py
+  backend/tests/
+    __init__.py
+    _env.py
+    test_iteration_v7_gaps.py
+    test_personas_v6.py
+    test_roastbox_monetization_v5.py
+    test_v7_features.py
+    test_v8_battle_reel_share.py
+  deploy/
+    entrypoint.sh
+  docs/
+    API.md
+    ARCHITECTURE.md
+    DEPLOYMENT.md
+    INTEGRATIONS.md
+    LOCAL_INSTALL.md
+    PERSONAS.md
+    WORKSPACE_SETUP.md
+  frontend/
+    .env.example
+    .gitignore
+    README.md
+    components.json
+    craco.config.js
+    jsconfig.json
+    package.json
+    postcss.config.js
+    tailwind.config.js
+    yarn.lock
+  frontend/plugins/health-check/
+    health-endpoints.js
+    webpack-health-plugin.js
+  frontend/public/ — 4 bundled asset file(s)
+  frontend/public/assets/ — 1 bundled asset file(s)
+  frontend/public/assets/about-author/ — 1 bundled asset file(s)
+  frontend/public/assets/about-author/audio/ — 10 bundled asset file(s)
+  frontend/public/assets/about-author/images/ — 10 bundled asset file(s)
+  frontend/public/assets/intro/ — 3 bundled asset file(s)
+  frontend/public/assets/personas/ — 40 bundled asset file(s)
+  frontend/public/assets/sfx/ — 6 bundled asset file(s)
+  frontend/public/assets/sfx/crowd/ — 14 bundled asset file(s)
+  frontend/src/
+    App.css
+    App.js
+    index.css
+    index.js
+    setupProxy.js
+  frontend/src/assets/fonts/ — 2 bundled asset file(s)
+  frontend/src/components/
+    AboutAuthor.jsx
+    AboutAuthor.test.jsx
+    AccountMenu.jsx
+    AdultConsent.jsx
+    ApiLoadError.jsx
+    CinematicIntro.jsx
+    EmailAuthDialog.jsx
+    PersonaBrowser.jsx
+    PersonaFavoriteButton.jsx
+    PersonaProfileDialog.jsx
+    ReelButton.jsx
+    ShareButton.jsx
+    ShowTranscript.jsx
+    TopBar.jsx
+  frontend/src/components/studio/
+    HeatControls.jsx
+    HotSeatForm.jsx
+    RosterPicker.jsx
+    StepPanel.jsx
+  frontend/src/components/theater/
+    RoastTheater.jsx
+  frontend/src/components/ui/
+    accordion.jsx
+    alert-dialog.jsx
+    alert.jsx
+    aspect-ratio.jsx
+    avatar.jsx
+    badge.jsx
+    breadcrumb.jsx
+    button.jsx
+    calendar.jsx
+    card.jsx
+    carousel.jsx
+    checkbox.jsx
+    collapsible.jsx
+    command.jsx
+    context-menu.jsx
+    dialog.jsx
+    drawer.jsx
+    dropdown-menu.jsx
+    form.jsx
+    hover-card.jsx
+    input-otp.jsx
+    input.jsx
+    label.jsx
+    menubar.jsx
+    navigation-menu.jsx
+    pagination.jsx
+    popover.jsx
+    progress.jsx
+    radio-group.jsx
+    resizable.jsx
+    scroll-area.jsx
+    select.jsx
+    separator.jsx
+    sheet.jsx
+    skeleton.jsx
+    slider.jsx
+    sonner.jsx
+    switch.jsx
+    table.jsx
+    tabs.jsx
+    textarea.jsx
+    toast.jsx
+    toaster.jsx
+    toggle-group.jsx
+    toggle.jsx
+    tooltip.jsx
+  frontend/src/constants/testIds/
+    auth.js
+    home.js
+    index.js
+  frontend/src/data/
+    authorStory.js
+  frontend/src/hooks/
+    use-toast.js
+    usePersisted.js
+    useShowPlayer.js
+  frontend/src/lib/
+    AuthContext.jsx
+    ConsentContext.jsx
+    LoungeContext.jsx
+    PersonaFavoritesContext.jsx
+    ToastContext.jsx
+    api.js
+    audioFocus.js
+    crowdEngine.js
+    media.js
+    sessionStore.js
+    uploads.js
+    utils.js
+  frontend/src/pages/
+    AuthCallback.jsx
+    BattlePage.jsx
+    CheckoutCancel.jsx
+    CheckoutSuccess.jsx
+    CreditsPage.jsx
+    EmailTokenPage.jsx
+    RoastersPage.jsx
+    SettingsPage.jsx
+    SharePage.jsx
+    SplashScreen.jsx
+    StudioPage.jsx
+  frontend/src/styles/
+    about-author.css
+    account-menu.css
+    cinematic-intro.css
+    consent.css
+    email-auth.css
+    landing.css
+    lounge.css
+    personas.css
+    v8.css
+  scripts/
+    build_original_soundtrack.py
+    init_env.py
+    local_start.py
+    package_source.py
+    run-preview.sh
+    test_about_author.py
+    test_account_menu.py
+    test_api_routes.py
+    test_cinematic_launch.py
+    test_crowd_mix.py
+    test_google_login_full_stack.py
+    test_google_login_ui.py
+    test_installation.py
+    test_lounge_audio_focus.py
+    test_mix_heat_preferences.py
+    test_persona_browser.py
+    test_preview_navigation.py
+    test_responsive.py
+    test_show_voice_ducking.py
+    test_theater_display.py
+    ui_helpers.py
+  tests/
+    __init__.py

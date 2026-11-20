@@ -1,0 +1,469 @@
+RAP BATTLE UPDATE (2026-11-05)
+Battle offers Classic or Rap, with the existing access, credits, heat, language and boundaries. Rap uses fictional fighter profiles and local portraits; in the two-stage OpenRouter path, OpenAI vision analyzes portraits together with any guest photos in one request, and the writer receives labeled observations, not image bytes. Vision and TTS may incur charges even without a guest photo. The legacy writer receives labeled portrait images directly. No new provider or account is required. An original locally synthesized 90 BPM loop backs spoken TTS; delivery and beat synchronization are approximate, not singing. Voice stays forward with a separate beat slider and ducking; the beat stops with playback and is included in newly rendered rap reels. Old records default to classic. Reels and live provider output have not been end-to-end verified; do not treat mock tests as proof of musical quality. Offline checks: python backend/scripts/test_rap_battle.py and node scripts/test_crowd_timing.js (shell: Bash).
+
+COMEDY STYLES AND PAID CREATIVE PROFILE (supersedes older writer notes)
+The Studio and Battle forms allow several optional comedy lenses; these augment
+existing fictional personas, selected heat, clean/adult mode and boundaries.
+Existing show/beat and speech formats are retained. They are not a standalone
+5–10-joke ranking/favorites product, and there is no new five-level heat scale.
+
+The preview remains on its previously approved FREE writer. Paid creative
+profile is prepared but disabled. To opt in, privately configure the API server:
+ROAST_WRITER_PROFILE=creative and ROAST_FREE_WRITER_ONLY=false, with an
+OpenRouter key and available credits; restart the API without any conflicting
+environment overrides. The default primary is thedrummer/cydonia-24b-v4.1 and
+the backup is cognitivecomputations/dolphin-mistral-24b-venice-edition.
+Mistralai/mistral-uncensored-1.2 was not in the catalog when inspected and is
+not configured. Hermes is not offered as a premium UI option; an administrator
+may investigate selecting a supported model through the model environment
+variables. Free-only mode blocks paid model IDs. Pollinations and Emergent
+fallbacks remain separately controlled by their existing flags; review privacy
+and cost before enabling them.
+
+Creative requests impose OpenRouter provider per-million-token rate ceilings
+configured with ROAST_MAX_INPUT_USD_PER_M and ROAST_MAX_OUTPUT_USD_PER_M.
+These are NOT an account or daily dollar spending cap. Configure OpenRouter
+key-level budget/guardrail and provider limits separately. The existing preview
+show/voice counters are attempt limits, not spending caps. A primary timeout
+gets at most one explicit retry; a timed-out request may already be billable.
+Output extraction handles some malformed JSON locally; it is not a guaranteed
+repair or a paid rewrite. Model latency and usage/cost are logged when returned
+without prompts or secrets; missing provider cost is unknown, not zero. Photo
+vision and TTS can bill separately. No live provider or 20-prompt paid benchmark
+was run; model availability, quality, retries and costs must be verified before
+production. User-supplied OpenAI/ElevenLabs credentials still take precedence.
+
+SPLASH AND RESPONSIVE UPDATE: After the skippable Hustler Anomalies intro,
+a compact bottom-docked disclaimer dialog requires the 18+ checkbox before
+Enter the Roast. It contains no lounge control. Enter opens a separate centered
+sign-in dialog for signed-out users. The lounge remains available inside the
+account menu. Intro audio has a locally generated impact; browsers may block
+autoplay, in which case use Replay with sound. No sound plays on reduced-motion
+intro by default. Direct links retain their consent gate. Layout and controls
+were tested in emulated viewport sizes; real physical devices remain unverified.
+
+SHOW DRAFT LIFETIME: Studio and Battle selections, text, heat, duration,
+toggles and crowd volume are held per signed-in user and browser tab for the
+session; they survive in-app navigation and ordinary reloads. Logout, an
+expired session or account switch clears them. Uploaded photo files stay
+only in browser memory across in-app navigation and must be selected again
+after a page reload or tab close; they are never written to browser storage.
+Unsaved API key fields are intentionally not retained across navigation.
+
+UPDATE — FREE WRITER, OPTIONAL FALLBACKS (supersedes earlier provider notes)
+When ROAST_WRITER_PROVIDER=openrouter, the default writer model is
+ROAST_WRITER_MODEL=google/gemma-4-31b-it:free; the second free model is
+ROAST_FREE_BACKUP_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free. Free model
+availability, quality, filtering and limits can change. These are not verified
+uncensored models. Free-only mode (ROAST_FREE_WRITER_ONLY=true) rejects model
+IDs without :free before generation. Optional ROAST_POLLINATIONS_FALLBACK=true
+adds a no-signup, rate-limited, best-effort text fallback; it can receive the
+name, context, boundaries, and photo observations, but not photo files or keys.
+It may cache responses. Inform end users; avoid sensitive information.
+OpenAI or Emergent still analyzes photos and supplies speech and MAY CHARGE;
+AI_DEFAULT_PROVIDER=openai selects OpenAI for hosted vision/speech where
+configured, while user OpenAI/ElevenLabs BYOK retains precedence. Writer
+fallbacks do not repair a failed vision or TTS call. Emergent's writer fallback
+is preserved but runs only if ROAST_FREE_WRITER_ONLY=false and
+ROAST_ALLOW_PAID_WRITER_FALLBACK=true; it can charge. To use a paid writer
+later, set ROAST_FREE_WRITER_ONLY=false and ROAST_WRITER_MODEL to the desired
+model; restart the API. Put all keys only in private server configuration.
+No provider can be guaranteed always available. Live generation was NOT tested;
+only offline mocks were run. Preview hosted AI is separately disabled unless
+explicitly enabled and budgeted, even if a user supplies an OpenAI BYOK key.
+
+DA ROASTBOX — AI ROAST GENERATION GUIDE
+Persona customization, comedy intelligence, speech and future extensions
+Audit date: 2026-11-04. All paths are relative to this project root.
+==========================================================================
+
+PURPOSE AND SAFETY
+This guide describes source code, not a promise that a model is funny, that
+image analysis is accurate, or that every forbidden topic will be caught.
+"Model" means the AI program generating language; "prompt" means instructions
+and information sent to it. An API is the interface between programs. Provider
+calls may be billed even if the app later rejects output. Do not run paid calls
+for testing without the account owner's permission. No customer secrets belong
+in source, prompts, examples, screenshots or issue reports.
+
+Companion documents: DA_ROASTBOX_DEVELOPER_NOTES.txt gives all systems and
+configuration. DA_ROASTBOX_INSTALL_BUILD_DEPLOYMENT_MANUAL.txt covers setup,
+hosting, Android and iOS. Read docs/API.md and docs/INTEGRATIONS.md as well.
+
+1. ACTUAL PIPELINE — FROM PHOTO TO PERFORMANCE
+-----------------------------------------------
+  Browser persona(s), images, optional facts/boundaries, heat/language
+      | StudioPage.jsx or BattlePage.jsx; multipart request through lib/api.js
+      v
+  /api/roast/generate or /api/battle/generate, FastAPI route
+      | check session, per-user generation lock, selected personas, access,
+      | credits, image count/type/size and user-provided provider key
+      v
+  roast_engine.read_images -> bounded Pillow decode, orientation/thumbnail,
+  JPEG normalization and metadata removal. Images and context are private data.
+      v
+  roast_writer.build_roast_prompt or build_battle_prompt: selected cast, turn
+  plan, details, heat/adult and off-limits serialized as data
+      v
+  write_script: SYSTEM_PROMPT + request text + ordered high-detail images ->
+  existing model chain / OpenAI-compatible client, ONE successful writing call
+      | model is instructed to privately identify clear visual choices, rank
+      | evidence, brainstorm angles, edit and return JSON; no separate image
+      | analyst/critic call, no stored independently verified evidence map
+      v
+  _script_problem and parse_beats: structural checks and a few narrow content
+  checks; local rejection is before TTS/credit charge, but provider may bill
+      v
+  roast mode finish_roast_script adds voiced welcome, optional safe turn weave,
+  final host thanks/motto and rapid-fire marks; battle has separate structure
+      v
+  voice_orchestrator.synthesize_show generates each beat concurrently with
+  selected provider; missing voice fails whole result before credit commit
+      v
+  roast_engine.commit_record stores images/record and debits or uses free roast;
+  API sends transcript and authorized URLs to frontend
+      v
+  RoastTheater/useShowPlayer shows photo/captions, plays leveled voice, applies
+  emotional gaps and ducks crowd; optional share and reel from saved show.
+
+No separate general "roast category" selector exists. Present choices are
+roast versus battle, personas, heat, language, context and optional topics to
+avoid. Battle can run without an uploaded image. Roast requires at least one.
+Name/context are not an unrestricted conversation history. Saved show history
+is not automatically fed back to the writing model. There is no persistent
+conversation memory or retrieval-based joke library in the present pipeline.
+
+2. CODE MAP AND RESPONSIBILITIES
+--------------------------------
+frontend/src/pages/StudioPage.jsx — forms, 1–5 persona IDs, subject/context,
+images, quote, heat, adult toggle and /roast/generate. Changing field names
+requires matching backend form parameters and tests.
+frontend/src/pages/BattlePage.jsx — two IDs, rounds, optional photos, battle
+access, submit and scoreboard. Both pages use HeatControls.jsx; off-limits are
+available. frontend/src/components/PersonaBrowser.jsx and PersonaProfileDialog
+choose and preview characters. backend/routes/personas.py loads the catalog.
+backend/routes/roast.py and backend/routes/battle.py — endpoint validation,
+entitlement gating, prompt invocation, TTS completeness and commit. Do not put
+provider keys in the browser or move billing before validation.
+backend/services/roast_engine.py — image normalization, user access, locks,
+private storage, credit writes, error mapping, staged recovery. Do not silently
+skip checks or charge a failed result.
+backend/services/roast_writer.py — SYSTEM_PROMPT, HEAT_NOTES, ADULT_ON/OFF,
+_persona_block, _image_note, turn planner, roast/battle prompt builders,
+_image_parts, MODEL_CHAIN, write_script, _script_problem, parse_beats and
+finish_roast_script. Text returned must contain a JSON script array with known
+persona IDs and performance fields; excessive prompt/format edits can break
+parser, TTS, theater, reel and tests.
+backend/services/openai_service.py — get_client chooses user OpenAI key first,
+then Emergent gateway key, then hosted direct OpenAI key. It also wraps TTS.
+backend/services/elevenlabs_service.py — ElevenLabs speech requests.
+backend/services/voice_orchestrator.py — voice selection, emotional tags,
+acting notes, TTS fallback, concurrency and storage. See section 7.
+backend/services/audio_mastering.py — local FFmpeg gated RMS/limiter at playback
+for both old and new audio; caches mastered result without overwriting source.
+backend/services/highlight_reel.py — selects complete beats, produces 1080x1920
+MP4 with voice, captions, photos and attenuated crowd; no new AI writing.
+frontend/src/hooks/useShowPlayer.js, components/theater/RoastTheater.jsx,
+lib/crowdEngine.js, lib/audioFocus.js, lib/media.js — timing, playback,
+volume, ducking and authenticated media. Reel timing is separately implemented.
+backend/data/personas.json — data-driven catalog (not one Python class per
+persona). backend/routes/personas.py reads JSON once at process startup.
+backend/scripts/test_roast_showrunner.py and verify_workspace.py — prompt and
+mock/integration checks. See exact test commands in section 9.
+
+3. PERSONAS — EDIT, ADD AND REMOVE SAFELY
+-------------------------------------------
+The JSON array in backend/data/personas.json currently contains 40 objects.
+Representative actual fields (shortened to avoid copying a routine):
+  {
+    "id": "persona_1",
+    "name": "Sunny Host",
+    "displayName": "Big Sun-K",
+    "role": "Host / Emcee",
+    "tier": "free",
+    "image": "assets/personas/persona_1.webp",
+    "cadence": "smooth-confident",
+    "quirks_prompt": "character-specific style instructions",
+    "lingo": ["short expression"], "topics": ["fashion"],
+    "punchlines": ["fictional example line"],
+    "speech": {"rate": 1.05},
+    "tts_voice_hd": "ash", "tts_voice": "onyx",
+    "elevenlabs": {"voice_id": "provider voice ID", "stability": 0.55},
+    "voice_direction": "fictional stage performance direction"
+  }
+This is an explanatory fragment, NOT a complete replacement record. Inspect
+existing records for all required fields (tagline, description, image, rating,
+color, age, gender and voice metadata) and retain valid JSON syntax. Existing
+catalog inspiration labels/voice directions reference real artists; the writer
+instructs original fictional performances rather than impersonation. Review
+voice rights, identity/likeness and references before commercial release.
+
+To change personality, vocabulary and topic lenses:
+1. Back up the JSON privately; open it with a code editor.
+2. Find the existing unique "id" and change quirks_prompt, cadence, lingo,
+   topics, tagline/description and/or punchlines. Preserve IDs used in history.
+3. Punchlines are adult-only style references in prompts and can be used as
+   catalog voice samples. Clean prompts omit samples; examples are explicitly
+   instructed not to be copied as guest facts. Do not add copyrighted routines,
+   real allegations or sensitive facts. Boundary matching is not semantic.
+4. Aggression/profanity must remain bounded by selected heat and adult toggle,
+   not forced globally in persona text. Explicit topic/lingo text should also be
+   reviewed for clean mode and off-limits; prompt instructions are not a filter.
+5. Save valid UTF-8 JSON. From project root run:
+   python -m json.tool backend/data/personas.json > /dev/null   (Bash)
+   python -m json.tool backend/data/personas.json > $null       (PowerShell)
+6. Restart the backend because the catalog is loaded once. Confirm the catalog
+   through GET /api/personas and browser. Run offline tests below.
+
+To change performance: edit cadence and voice_direction; for OpenAI choose a
+supported tts_voice_hd and check openai_service.EXPRESSIVE_VOICES. tts_voice is
+fallback metadata; tts_voice_hd is selected before tts_voice. speech.rate is
+used by the older tts-1 fallback. Not every speech field is honored by every
+provider; pitch and pause fields are metadata, not guaranteed TTS controls.
+ElevenLabs voice_id/stability must be available to the configured account. A
+personal ElevenLabs key can be used; hosted ElevenLabs access is gated by premium
+voice access. OpenAI expressive receives acting instructions; ElevenLabs gets
+emotion tags and text, not the full OpenAI acting note. No provider guarantees
+exact voice timing. Existing cached preview audio may not reflect edits; inspect
+routes/personas.py PREVIEW_VERSION and cache migration carefully in a test copy.
+Changing a voice may incur a charge when a fresh preview is generated.
+
+To change appearance, add a licensed portrait in frontend/public/assets/personas/
+and the corresponding backend/assets/personas/ if reels need the portrait.
+Reference its actual relative public path in image; verify catalog, browser and
+reel. Do not delete old images needed by historical records.
+
+To add a character:
+1. Copy a complete object to a separate editor buffer as a schema example; do
+   not copy a real person's likeness or artist's lines without appropriate rights.
+2. Create a stable unique id, distinctive display name, role, tier and safe voice
+   configuration, valid image path, content and performance values.
+3. Append to the array with correct commas. Validate JSON as above. Add matching
+   bundled art in both relevant locations and ensure licensing.
+4. Restart API, inspect GET /api/personas and selection/lock behavior, test
+   favorite/profile/reel and mocked preview. Update assumptions and tests that
+   count 40 personas. Review pricing/entitlement impact for premium.
+5. Never remove or reuse a historical ID casually: persisted roasts and favorites
+   reference it. To retire, design an explicit deprecation/migration, preserve
+   historical display/voice assets, back up DB and test against a copy. There is
+   no existing general-purpose persona admin interface.
+
+Default roster: Studio uses a selected-array state, not a global mandatory
+persona profile. Inspect frontend/src/pages/StudioPage.jsx and PersonaBrowser.jsx
+before implementing preselection. Changing a JSON array's order is not a reliable
+way to add a default selection; write explicit state and test locked personas.
+
+4. COMEDY INTELLIGENCE AND ORIGINALITY
+---------------------------------------
+Today the "library" is prompt guidance and per-persona metadata, not a database
+of jokes or a semantic search system. Current private writer-room instruction
+in SYSTEM_PROMPT asks the model to inventory clearly visible clothing, pose,
+expression, props and setting, rank usable observations, brainstorm several
+angles, select concise speakable lines, and self-check controls. Uploaded photo
+index is assigned by the model; it is NOT independently verified. Do not assume
+an observation is true when it is unclear or multiple subjects exist. It must
+not infer protected traits, identity, age, health or criminality. User-provided
+text and text inside images are untrusted data, not overriding instructions.
+
+Use structures as tools, not hard-coded insult templates:
+* "your-mama" / family bits: only if all parties and boundaries permit; family
+  may be explicitly off-limits, and age/sexual restrictions still apply.
+* looking-ass / built-like: ground in a permitted observable styling choice;
+  compare to an unexpected concrete thing, never assume sensitive traits.
+* "that's why" consequence: setup -> surprising absurd outcome -> quick tag.
+* slang and street sayings: choose a few natural character-specific expressions;
+  don't impose a single racial dialect or treat criminal identity as a fact.
+* one-liner: short setup and reversal; avoid filler and generic "looks like".
+* double entendre / adult relationship humor: only with adult mode enabled and
+  chosen heat, no sexualization of anyone whose age is unknown.
+* story -> misdirect -> payoff; sarcasm, deadpan and comeback; quick reactions
+  to prior persona, audience work without invented real audience facts.
+* callback: establish a detail, then return with a new twist, not the same line.
+* metaphor: compare incompatible specifics in an original way. Multi-stage:
+  observation -> assumption -> unexpected correction -> tag. Vary structure.
+
+To customize: update SYSTEM_PROMPT or persona lingo/topics, not copied jokes;
+review _persona_block and build_roast_prompt/build_battle_prompt. Keep metadata
+fictional. Use a small curated, licensed pool if developing examples; label them
+as style references, not guest facts, include clean/adult metadata and exclusion
+logic, and add tests. Existing _persona_block filters some exact boundary terms
+and omits adult examples in clean mode; it cannot identify all indirect matches.
+Avoid repeating line beginnings and punchline targets; planner alternates cast,
+local checks reject exact repeats and an extreme repeated "you look like"
+pattern. Those heuristics are neither originality detection nor quality scoring.
+No automatic joke plagiarism checker or comprehensive safety classifier exists.
+
+5. MODEL PROVIDERS, COST AND FAILURES
+-------------------------------------
+MODEL_CHAIN in backend/services/roast_writer.py currently names
+claude-sonnet-4-5-20250929, gpt-4.1 and gpt-4o in order. Claude is available
+ONLY through the existing compatible Emergent gateway if that gateway supports
+it; a direct OpenAI key skips Claude. BYOK OpenAI overrides hosted configuration;
+hosted Emergent wins over hosted OPENAI_API_KEY. Client construction and base
+URL are in services/openai_service.py, not an environment-selectable generic
+provider registry. The first usable, non-refusal response stops the chain; the
+local validator can reject it without an extra rewrite. Exceptions/refusals can
+cause another provider/model attempt, possibly billable. max_tokens=6000 and
+model-specific temperatures are in write_script. Inputs include base64 images,
+so model must accept multimodal message parts. Contract and availability can
+change; test compatibility before changing model names or token limits.
+
+To change models: 1. Branch and back up. 2. Check multimodal JSON, timeout,
+provider terms and price. 3. Change MODEL_CHAIN/selection in roast_writer.py.
+4. Add mock responses for failure, invalid JSON, clean and boundaries. 5. Run
+no-cost regression. 6. Only with explicit approval, compare a small, capped live
+sample using synthetic images/data, recording latency, token costs, failure
+rate, image grounding, persona distinction, repetition and human-rated laughs.
+Do not publish provider secrets or real target images in evaluation reports.
+
+Anthropic direct, Gemini, Hugging Face inference, Ollama/local models and other
+providers are NOT implemented as direct runtime adapters despite some installed
+SDKs. Evaluate their image input, JSON support, safety, latency, pricing,
+licensing and privacy. For a new adapter: define a common async interface
+(generate(messages, images, controls) -> text/usage), translate request and
+response without leaking provider details to routes, implement limits/timeouts,
+cancellation, stable errors and explicit fallback rules, then mock each provider.
+Local models require a separately deployed compatible server and resource/security
+planning; setting an Ollama URL alone does not make the current code support it.
+Avoid automatic extra retry/critic calls that silently multiply costs.
+
+6. PROMPTS, RETRIEVAL AND FINE-TUNING
+---------------------------------------
+System prompt = high-level rules and output format (SYSTEM_PROMPT). User block =
+route-specific instructions plus JSON-encoded target/context/boundaries. Persona
+prompt = selected persona's fictional metadata assembled by _persona_block.
+Context injection = passing relevant allowed facts as data, not letting those
+facts override rules. The source has no separate OpenAI "developer" role;
+a future provider adapter can map a higher-priority instruction role as needed.
+Few-shot examples illustrate desired form but risk verbatim copying and false
+facts; keep authorized examples separate from guest evidence and mode-filtered.
+Retrieval (searching a vetted library at request time) and fine-tuning (training
+model parameters on examples) are future ideas, not implemented services.
+
+Improve without training: provide good voluntary context and clear photos;
+revise instructions to prefer precise observations, reversals and short tags;
+compare blinded examples; tune temperature/model and evaluate against a held-out
+fixture set; inspect adult/clean/heat boundaries and photo ambiguity. Fine-tune
+only after securing rights and consent, collecting diverse well-labeled examples,
+removing private information, establishing a measurable baseline and budget,
+and verifying the provider supports your desired modalities. A tuned model will
+not replace validation, source transparency or ongoing human review.
+
+7. VOICE AND PERFORMANCE
+--------------------------
+Beats include text, type, persona_id, emotion, delivery, laugh_after, reaction,
+pause_before_ms, pause_after_ms, image_index and standalone. parse_beats bounds
+integers and normalizes unknown enums. finish_roast_script may reduce final
+rapid-fire gaps; browser useShowPlayer interprets pauses between audio clips,
+not precise silence inside a generated speech clip. Script author may request a
+held reveal in delivery; only providers accepting instructions can attempt it.
+voice_orchestrator.py maps emotion -> OpenAI acting instructions and ElevenLabs
+short tags. It chooses ElevenLabs when a permitted key is available, falls back
+to OpenAI; OpenAI expressive TTS falls back to tts-1. Some directions are
+ignored by fallback providers. Verify rights for any voice; do not clone or
+impersonate a real person without consent and legal authorization.
+
+Raw audio is stored privately; services/audio_mastering.py locally analyzes and
+limits level on access and for newly rendered reels. It has bounded concurrency,
+content-addressed cache and fallback to the original. Loudness cannot be made
+identical on all voices/devices. Crowd engine reduces volume during speech;
+slider preference persists; highlight_reel.py separately ducks the reel mix.
+Offline tones test mixing, not an actual professional sound check.
+
+Future 3D director (NOT PRESENT): keep current backend output as canonical beat
+timeline; create a separate performance adapter that maps emotion, duration and
+phoneme/viseme timing to legal GLB/GLTF characters in Three.js. Load an
+asset/rig manifest, render scene, animate facial blend shapes, lip sync, gestures
+and stage transitions against audio clock. Obtain actual timing metadata from a
+provider or separate aligner, handle drift, permissions and fallback captions;
+do not infer phonemes from text as if exact. Do not store biometric face models
+of users without explicit consent. Test mobile GPU, reduced motion, offline
+fallback, and respect independent voice/audio source. Existing React theater is
+2D photo/caption animation, not a Three.js or lip-sync implementation.
+
+8. EXTENDING MODULES — STEP BY STEP
+------------------------------------
+New model: create adapter under backend/services/, wire in openai_service or a
+provider registry, maintain message/schema contract, mock it and guard cost.
+New style: add data or selectable mode only after defining a request field,
+validating it in routes, adding a prompt builder and heat/clean tests; do not
+trust a user text field as privileged prompt instructions.
+Persona collections: version catalog schema, add unique IDs/assets and migration
+strategy as section 3; update locks, favorites, history and previews.
+Voice provider: add service with timeout and error mapping; choose in
+voice_orchestrator, save via storage.save_audio, preserve audio_url and master;
+mock success, timeout, fallback, access and cleanup.
+Languages: add explicit user preference and validated BCP-47 language tag,
+translated UI and prompts, supported voices and per-language clean/boundary
+checks. Current validator is English-centric; do not claim multilingual safety.
+Joke library: licensed/versioned records with language, topic and clean flags;
+filter user boundaries first, retrieve without user-identifying logs; add tests
+for no copying. This does not exist now.
+Performance systems: consume normalized beat + audio timeline, don't modify
+billing data. Test synchronization and reduced motion as in section 7.
+AI image/video: add private opt-in route and provider adapter, documented prices,
+rights/moderation, separate storage and explicit user consent; no current runtime
+provider. Generated media should not impersonate real people without authority.
+New roast mode: new route and writer structure, access/pricing, frontend form,
+theater/reel compatibility and test matrices. Battle already exists.
+
+9. QUALITY CONTROL AND TEST PLAN
+---------------------------------
+No-cost commands in project root after installing dependencies and starting local
+MongoDB (PowerShell; venv path on Bash is .venv/bin/python):
+  .\.venv\Scripts\python.exe backend\scripts\test_roast_showrunner.py
+  .\.venv\Scripts\python.exe backend\scripts\test_voice_leveling.py
+  .\.venv\Scripts\python.exe backend\scripts\test_voice_first_mix.py
+  .\.venv\Scripts\python.exe backend\scripts\verify_workspace.py
+  .\.venv\Scripts\python.exe scripts\test_crowd_mix.py
+Browser Web Audio check requires optional Playwright/Chromium. verify_workspace
+uses a temporary database and mocks paid providers; check prerequisites and
+logs. Never point tests at customer production data. See deployment manual for
+installer and browser prerequisites. Do not run unknown legacy test suites,
+voice previews, deep diagnostics or live generation without cost approval.
+
+Example fixture request: name "Alex", context "collects plastic karaoke
+ trophies", off_limits "family, health", one clearly visible red jacket photo.
+Expected: selected persona IDs only, jokes can reference clear red jacket and
+supplied trophy, no family/health references, user-selected heat, correct photo
+index, valid JSON and complete voices. This is a test idea, not a guarantee.
+Other cases: no photo in battle -> no invented visual details; two ambiguous
+people -> don't assert which is guest; clean mode -> no profanity/sex/drugs;
+Mild -> milder than Inferno; explicit boundary -> omitted, including paraphrase
+as far as model can manage; failed provider -> error and no RoastBox charge;
+invalid JSON/unknown speaker -> reject; fallback mock -> retry only appropriate
+models; repeated templated openings -> reject extreme pattern; quiet voice ->
+synthetic leveling tests; muted crowd -> restored across theater replay.
+Human evaluation should grade groundedness, originality, surprise, stage rhythm,
+character distinction, safety and consistency against at least two independent
+reviewers; compare across identical anonymized prompts. Automated checks are
+not a professional comic or complete moderation system.
+
+10. QUICK CUSTOMIZATION REFERENCE
+----------------------------------
+WHAT | LOCATION | MODIFY | TEST
+Default persona | frontend/src/pages/StudioPage.jsx | explicit selection state;
+  test locked/missing IDs and reload (no current global default persona setting).
+Add persona | backend/data/personas.json + both assets/personas directories |
+  unique full record and portrait | JSON validation/catalog/mock preview/reel.
+Persona voice | personas.json + voice_orchestrator.py | tts_voice_hd,
+  elevenlabs, voice_direction | mock TTS/cache tests; approved listening later.
+Default model | roast_writer.py MODEL_CHAIN | supported model ordering | mock
+  fallback/multimodal schema; live quality only with explicit approval.
+Roast category | StudioPage/BattlePage + route + writer | new validated field
+  and controlled builder | API/UI/clean/entitlement tests; not present now.
+Joke variety | roast_writer.py SYSTEM_PROMPT, _script_problem and turn planner |
+  prompts and narrow duplicate check | showrunner fixtures/human review.
+Profanity | HeatControls.jsx, ADULT_ON/OFF and validation | preserve explicit
+  mode, boundary and entitlement behavior | clean/adult mocked matrix.
+System prompt | roast_writer.py SYSTEM_PROMPT | edit hierarchy/schema carefully |
+  showrunner, integration and privacy tests.
+Another AI provider | openai_service.py + new adapter | normalize interface,
+  credentials, timeouts, fallback | contract mocks and approved small live test.
+Voice pipeline | voice_orchestrator.py, openai_service.py, elevenlabs_service.py,
+  audio_mastering.py | adapter/delivery/mix | synthetic/audio/browser tests.
+Animated character | future React/Three.js adapter | rig/animation sync layer |
+  no existing implementation; test mobile and accessibility.
+Performance instructions | persona voice_direction, acting_instructions(),
+  SYSTEM_PROMPT beat metadata, useShowPlayer.js | stage notes and bounded gaps |
+  mocked provider metadata, browser timing, approved listening.

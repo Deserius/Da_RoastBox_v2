@@ -1,0 +1,9 @@
+.comedy-styles { min-width: 0; padding: 14px; margin: 16px 0 8px; border: 1px solid var(--panel-border); border-radius: 14px; background: var(--bg-panel-soft); }
+.comedy-styles legend { padding: 0 5px; color: var(--accent-alt); font: 800 12px/1.3 system-ui,sans-serif; }
+.comedy-styles legend span { color: var(--text-soft); font-weight: 500; }
+.comedy-styles p { margin: 0 0 10px; color: var(--text-soft); font: 12px/1.45 system-ui,sans-serif; }
+.comedy-styles-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(145px,100%),1fr)); gap: 7px; }
+.comedy-style { min-height: 44px; display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--panel-border); border-radius: 9px; color: var(--text-main); font: 700 12px/1.25 system-ui,sans-serif; cursor: pointer; }
+.comedy-style.selected { border-color: #ffa36b; background: rgba(255,106,51,.15); }
+.comedy-style input { width: 17px; height: 17px; flex: none; accent-color: #ff783e; }
+.comedy-style:focus-within { outline: 3px solid #ffd08d; outline-offset: 2px; }

@@ -1,0 +1,11 @@
+.inline-disclaimer { margin-top: 20px; padding: 16px; text-align: left; border: 1px solid #46515e; border-radius: 12px; background: #151a20; color: #d2d8df; font: 13px/1.55 system-ui, sans-serif; }
+.inline-disclaimer strong { display: block; color: #ffa36b; font-size: 11px; letter-spacing: .08em; }
+.inline-disclaimer p { margin: 9px 0 0; }
+.inline-disclaimer .checkbox-row { align-items: flex-start; min-height: 44px; margin-top: 13px; color: #fff; font-weight: 650; }
+.inline-disclaimer .checkbox-row input { flex: none; margin: 2px 0 0; }
+.inline-disclaimer input:focus-visible { outline: 3px solid #ffb07d; outline-offset: 3px; }
+.consent-gate-backdrop { display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: 24px; background: linear-gradient(#050608cc,#050608ef), var(--splash-bg) center / contain no-repeat, #040507; }
+.consent-gate-card { width: min(460px,100%); padding: 24px; border: 1px solid #46515e; border-radius: 18px; background: #10151b; color: #fff; box-shadow: 0 20px 70px #0009; }
+.consent-gate-card h1 { color: #ffa36b; font-size: 25px; }
+.consent-gate-card > p { color: #d2d8df; font-size: 14px; }
+@media (max-width: 400px) { .consent-gate-backdrop { padding: 14px; } .consent-gate-card { padding: 17px; } .inline-disclaimer { padding: 13px; } }

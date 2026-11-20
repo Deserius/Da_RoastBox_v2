@@ -1,0 +1,2338 @@
+DA ROASTBOX
+DETAILED INSTALLATION AND DEPLOYMENT INSTRUCTIONS
+Local Windows server + GitHub / Render Free private beta
+Filename: install_instructions.txt
+Applies to: the current downloadable project and launcher 1.2.3
+Documentation review: November 3, 2026
+
+==========================================================================
+READ THIS FIRST
+==========================================================================
+
+This is a practical, owner-operated guide for running the application OUTSIDE
+Arena.ai. You do not need an Arena browser tab or an Arena preview server
+running after you have downloaded the complete project.
+
+There are TWO different deployment methods:
+
+  A. LOCAL: the application runs on your own computer. A browser connects to
+     http://127.0.0.1:3000. Your computer must remain on while you use it.
+
+  B. CLOUD: Render runs the application at your assigned HTTPS website URL.
+     Your computer does not need to remain on. The Free service can sleep,
+     restart, hit quotas, or lose unfinished work. It is a PRIVATE BETA, not
+     an always-on production guarantee.
+
+The app's Python backend, MongoDB database, React frontend and FFmpeg remain
+intact. This guide does not replace them with Supabase/Postgres, create a
+second website, or require a paid Render disk.
+
+IMPORTANT LIMITS BEFORE YOU BEGIN:
+
+  1. A software download does NOT include private API keys, database records,
+     old purchases, generated shows, or customer media. Keep those private.
+     A source ZIP is not a database/media backup.
+
+  2. Free web hosting does NOT make OpenRouter, OpenAI, ElevenLabs, email,
+     storage transfers or other provider usage free. Configure provider
+     spending controls before permitting generation or voice samples.
+
+  3. Keep Stripe in TEST mode. Do not switch to live keys or real sales while
+     following this guide. No checkout or paid AI generation is necessary
+     just to install, deploy, or check the health endpoints.
+
+  4. Preserve your EXISTING JWT_SECRET if bringing existing data. That secret
+     is also used to derive encryption for saved user-supplied API keys.
+     Changing it can make those saved keys unreadable.
+
+  5. NEVER delete .data\mongo, reset user balances, regenerate old shows, or
+     overwrite a richer existing installation as an installation repair.
+     Do not stop MongoDB to fix a web-server/package problem.
+
+  6. The Google button still uses the managed Emergent authentication service
+     implemented in the source. It does not yet provide a separately wired,
+     self-managed Google OAuth client. Your NEW local/cloud origin must be
+     accepted by that managed provider. Merely setting GOOGLE_CLIENT_ID or
+     GOOGLE_CLIENT_SECRET will not replace this integration. See Section 08.
+
+  7. The current Free Render recipe uses a PRIVATE Vercel Blob store. Vercel
+     Hobby is restricted to personal/non-commercial use. TEST payments do
+     not automatically make a commercial/branded app eligible. Confirm your
+     eligibility before relying on that plan. If it is not eligible and no
+     approved compatible private store exists, STOP the cloud deployment;
+     do not make media public or silently start a paid plan. Local use can
+     continue. See Section 16.
+
+  8. This is the recovered/current downloadable source, not a certification
+     that it exactly equals every richer historical native release. Compare
+     before updating an older customized installation.
+
+  9. The prepared Windows files were assembled and checked in a Linux build
+     workspace. Native Windows double-click, certificate trust, UAC, default
+     browser and physical-phone behavior still need verification on your
+     actual hardware. A completed deployment also needs actual-origin
+     provider/authentication acceptance; a filled variable is not proof.
+
+This file contains NO real credentials. All placeholder names must be
+replaced privately by YOU. Do not paste secrets into chat, public GitHub,
+screenshots, frontend settings or browser JavaScript.
+
+No instructions in this file authorize an assistant to create accounts,
+spend money, migrate private records, overwrite an old deployment or repeat
+previously consumed paid tests. Cloud/resource/data steps are manual owner
+choices. Stop if a step would affect an account or database you did not select.
+
+==========================================================================
+CONTENTS - SEARCH FOR THE SECTION NUMBER WITH CTRL+F
+==========================================================================
+
+  01  Which download to use and what is inside it
+  02  Understand addresses, ports and folders
+  03  Decide: new empty installation or preserve existing data
+  04  Windows requirements and download verification
+  05  Local Windows installation: step-by-step
+  06  Local configuration and real AI/voice providers
+  07  Day-to-day local startup, shutdown, shortcuts and repairs
+  08  Google, email login and independence from Arena
+  09  Stripe TEST: local forwarding and cloud webhook setup
+  10  Local troubleshooting by symptom
+  11  Optional macOS/Linux local setup
+  12  Render deployment overview and preparation checklist
+  13  Prepare the current source safely for GitHub
+  14  Create/connect the correct GitHub repository
+  15  External TLS MongoDB / Atlas setup
+  16  Private persistent media / Vercel Blob setup and eligibility
+  17  Preserve/move existing database and media safely
+  18  Prepare private Render configuration and beta password
+  19  Full Render environment-variable checklist
+  20  Create the Render service: Blueprint OR manual Docker
+  21  Complete the real URL, auth, email, webhook and optional domain
+  22  First deployment checks without paid generation/checkout
+  23  Updating, backing up, rollback and Free-tier operations
+  24  Render troubleshooting and exact error meanings
+  25  Final checklists and important files
+  26  Official reference links and verification boundaries
+
+==========================================================================
+01. WHICH DOWNLOAD TO USE AND WHAT IS INSIDE IT
+==========================================================================
+
+Recommended current Windows download:
+
+  Da_RoastBox_Windows_Preinstalled.zip
+
+Matching checksum file:
+
+  Da_RoastBox_Windows_Preinstalled.zip.sha256.txt
+
+This specific prepared ZIP is 117,268,458 bytes, approximately 112 MiB.
+Its SHA256 for this delivered build is:
+
+  ccce4345adc3746dfb6c6deb65cca65a67aa8b9d26830a4f117c6608f33a9384
+
+A later replacement build can have a different checksum. Always compare the
+archive with the checksum belonging to THAT exact download.
+
+Included in the prepared Windows download:
+
+  - Official Windows x64 Python 3.13.16.
+  - 50 locked application packages installed as Windows-compatible files.
+  - Windows FFmpeg 9.0.2 through imageio-ffmpeg 0.8.0.
+  - Windows Node.js 22.23.4.
+  - Windows MongoDB Community 8.0.34 server and app-local Microsoft C++ DLLs.
+  - Yarn 1.22.22 for a genuine source rebuild if needed.
+  - A compiled React frontend and the app's bundled assets.
+  - The source, Dockerfile, render.yaml, examples and operating instructions.
+
+The installed dependency tree is compressed INSIDE the ZIP. First launch
+unpacks it locally/offline. This is not a folder of empty installer templates
+and not a copied Linux virtual environment. Normal unchanged launches do not
+need pip installation, npm/Yarn installation, or a frontend rebuild.
+
+Missing/changed program files can be restored from the local payload. If it
+is unavailable, the launcher uses compatible installed software or verified
+online setup. Repair/source changes can require internet and more disk space.
+
+Older downloads named Windows_One_Click or GitHub_Render_Free_Source are
+source/installer handoffs, not this prepared Windows dependency bundle. They
+can represent an older snapshot. Do not combine different snapshots blindly.
+
+FOR RENDER: you may use the APP SOURCE from this current extracted prepared
+package. Git and Docker must exclude runtime/, caches, env files and data.
+Render builds its own Linux image. Do NOT upload the 117 MB ZIP itself as your
+GitHub application, and do NOT commit Windows binaries as cloud dependencies.
+
+This install_instructions.txt is delivered separately. Place it beside
+START_HERE.txt in your extracted app if it was not already in your ZIP.
+
+==========================================================================
+02. UNDERSTAND ADDRESSES, PORTS AND FOLDERS
+==========================================================================
+
+LOCAL WINDOWS ARCHITECTURE:
+
+  Your browser
+      -> http://127.0.0.1:3000
+      -> Node serves the compiled frontend and proxies /api
+      -> FastAPI at http://127.0.0.1:8001
+      -> MongoDB at 127.0.0.1:27017
+      -> local media plus configured internet providers
+
+The web address to OPEN is port 3000. Port 8001 is the API, not the full UI.
+Port 27017 is the database protocol. It is NOT a website and will not display
+the application in your browser. Arena's existing preview port 3211 is not the
+default for your downloaded local installation.
+
+127.0.0.1 and localhost mean THE COMPUTER USING THAT ADDRESS. If you send a
+friend a localhost URL, it points to your friend's own computer, not yours.
+Use the Render HTTPS URL for normal remote access.
+
+RENDER ARCHITECTURE:
+
+  Browser -> https://YOUR-ASSIGNED-SERVICE.onrender.com
+          -> ONE Docker web service: FastAPI serves frontend AND /api
+          -> external TLS MongoDB
+          -> approved PRIVATE durable Blob storage
+          -> configured real writer, speech, auth, mail and Stripe TEST
+
+The Render container uses its platform PORT, normally through the Docker
+fallback 10000. You do NOT expose local ports 3000/8001/27017 on Render and
+must not put localhost:8001 into the browser build.
+
+IMPORTANT LOCAL FOLDERS:
+
+  Project root           Folder containing thelaunch.bat and install.py.
+  backend\.env           Private backend settings and secrets.
+  frontend\.env          PUBLIC frontend/build settings; never secret keys.
+  runtime\windows-x64\   Shipped Windows programs and local runtime payload.
+  .venv\                 Separate Python environment when source/repair needs it.
+  .cache\                Installer temp/cache and preserved runtime repairs.
+  .data\mongo\           Local MongoDB database files. Never delete as a fix.
+  backend\local_storage\ Local stored customer media by default in local mode.
+  backend\audio_cache\   Audio/cache originals; preserve during backups/moves.
+  backend\media_tmp\     Temporary media work, not a durable cloud media store.
+  frontend\build\        Compiled site; normal launcher reuses a matching build.
+  .private\              Private owner reports/exports/config, never Git content.
+
+Your configured LOCAL_STORAGE_DIR or remote store can override the default
+media location. The ACTUAL configured location is authoritative.
+
+==========================================================================
+03. DECIDE: NEW EMPTY INSTALLATION OR PRESERVE EXISTING DATA
+==========================================================================
+
+Before starting, choose the correct case. This is especially important if
+you already used an older native version or have balances/purchases/history.
+
+CASE A - genuinely new empty local install:
+
+  - Extract to a NEW folder.
+  - Let the launcher create missing env files and a new persistent secret.
+  - The fresh preview configuration normally selects da_roastbox_preview,
+    local media and explicit preview login.
+  - No previous accounts/shows are imported from the ZIP.
+
+CASE B - existing users/history/media must continue:
+
+  - Identify the actual authoritative installation, database and media store.
+    Do not assume a recovered ZIP or an older backup is the newest copy.
+  - Back up configuration, database and original media separately.
+  - Keep the exact existing JWT_SECRET and the actual DB_NAME.
+  - Do not rename the database or generate a replacement encryption secret.
+  - Do not overwrite a running MongoDB data directory with a copied folder.
+  - Compare code before updating a customized/richer native app.
+  - Do not run old/new app recovery workers against the same unfinished jobs
+    without a controlled cutover. Back up before pointing new code at old data.
+  - When moving hosts, follow Section 17. A source extraction alone is NOT
+    a migration. An empty database is not a reason to recreate purchases,
+    regenerate historical shows or manually add credits.
+
+If a newly extracted app looks empty, first check whether its backend .env
+points at the intended database and media store. A different DB_NAME can
+make an existing database look missing even though the original still exists.
+
+Normal NEW accounts receive 25 credits. Existing account balances and
+entitlements are authoritative. Explore's explicit preview behavior is not
+permission to reset or recharge normal users.
+
+==========================================================================
+04. WINDOWS REQUIREMENTS AND DOWNLOAD VERIFICATION
+==========================================================================
+
+Full prepared local setup targets:
+
+  - Windows 11 x64 or Windows Server 2022 x64.
+  - An x64 CPU supporting AVX for this MongoDB version.
+  - Windows PowerShell 5.1, normally included with Windows.
+  - A writable local folder, not a ZIP viewer or protected Program Files path.
+  - At least 2 GiB FREE AFTER extracting the ZIP for runtime unpacking and
+    initial local work. Prefer at least 4 GiB or more for repairs/builds and
+    allow additional growing database/media space.
+  - Enough system-drive space for Windows/browser/security activity too.
+  - A current supported browser and internet for actual external services.
+
+Windows ARM64, 32-bit Windows, Windows 7/8, old CPUs and managed/restricted
+PCs are not promised compatibility. This is not a universal Windows 10
+certification. Do not copy Linux venvs/node_modules into Windows as a fix.
+
+Downloading and verifying:
+
+  04.1 Save the complete ZIP and its matching .sha256.txt to Downloads or
+       another local folder. Wait for the download to finish.
+
+  04.2 Optional but recommended: open Windows PowerShell in that folder.
+       Run this command on YOUR PC, not inside an Arena terminal:
+
+       Get-FileHash ".\Da_RoastBox_Windows_Preinstalled.zip" -Algorithm SHA256
+
+  04.3 Compare the Hash result with the matching checksum file. Ignore
+       letter case. If different, do not run the archive; download it again
+       from the trusted source and verify the correct version.
+
+  04.4 Right-click ZIP -> Extract All. Extract the ENTIRE package.
+       Recommended example destination:
+
+       C:\RoastBox\da_roastbox
+
+       E:\RoastBox\da_roastbox is also fine. Prefer a short ordinary local
+       path with adequate space, outside cloud-synced/protected folders.
+
+  04.5 Open the resulting folder. You should directly see:
+
+       thelaunch.bat
+       start.bat
+       start.py
+       install.py
+       backend
+       frontend
+       scripts
+       runtime
+       Dockerfile
+       render.yaml
+
+       If those are inside another da_roastbox subfolder, open that inner
+       folder. That is your project root.
+
+  04.6 If Windows/security software blocks the file, check the verified
+       source/hash and the visible security message. Consult your admin if
+       necessary. Do not disable antivirus, weaken machine execution policy
+       or repeatedly approve an unknown/untrusted executable.
+
+==========================================================================
+05. LOCAL WINDOWS INSTALLATION - STEP BY STEP
+==========================================================================
+
+  05.1 Complete the data decision in Section 03 FIRST.
+
+  05.2 Open the extracted project root. Double-click:
+
+       thelaunch.bat
+
+       start.bat and LAUNCH_DA_ROASTBOX.bat are equivalent aliases.
+       Do not move only the BAT file onto the Desktop; it needs its project
+       files alongside it. Use a shortcut instead, described in Section 07.
+
+  05.3 Leave the console window open. It checks dependencies and normally:
+
+       a. Selects the shipped Python and checks its core files/publisher.
+       b. Verifies/unpacks the installed Windows runtime payload locally.
+       c. Verifies the installed package versions, key imports and FFmpeg.
+       d. Selects the shipped Node/MongoDB and app-local C++ runtime.
+       e. Creates backend/frontend .env ONLY IF MISSING.
+       f. Reuses the matching prebuilt site and locally copies shared assets.
+       g. Reuses a reachable configured MongoDB, or starts the private local
+          MongoDB for a plain loopback URI against preserved database files.
+       h. Starts the API and web frontend.
+       i. Waits for API, HTML and proxied API readiness.
+       j. Opens the REGISTERED DEFAULT BROWSER at http://127.0.0.1:3000.
+
+       The first offline unpack is real local extraction, not an additional
+       807 MB Mongo download. Antivirus/disk speed can affect startup time.
+       A changed/source-only/damaged setup can instead need online repair.
+
+  05.4 If a genuine prerequisite prompt appears during FALLBACK installation,
+       review it. Python fallback is per-user and checksum/publisher checked.
+       A source-only Mongo C++ prerequisite can need administrator approval.
+       The prepared app-local runtime normally avoids that C++ install.
+       A canceled prompt or enterprise policy cannot be silently bypassed.
+
+  05.5 If Windows says a restart is required, save your work and restart it
+       yourself when appropriate, then launch again. The launcher does not
+       force a reboot. Do not start repeated installers while one is active.
+
+  05.6 When the browser opens, the Hustler Anomalies Enterprises splash tries
+       to play its sound automatically. If silent, CLICK/TAP the intro or
+       press ENTER or SPACE while the browser page has focus. Scene/audio
+       restart together. Explicit Mute stays muted. Escape/Skip moves on.
+
+       Browser audio policy cannot reliably be overridden by a synthetic
+       JavaScript click or an unfocused global keystroke. Check tab, browser,
+       Windows output-device and speaker volume if a real gesture is silent.
+
+  05.7 Read and explicitly accept the 21+ consent/disclaimer before entering.
+       That consent is separate from a beta password and account login.
+
+  05.8 A fresh local preview can provide Explore/preview login. That is useful
+       to inspect navigation; it does not supply real AI/provider credentials.
+       Do not assume a Generate/voice-sample action is free. Configure keys
+       and provider budgets before those actions, as in Section 06.
+
+  05.9 If no browser opens but the console says Ready, manually open:
+
+       http://127.0.0.1:3000
+
+       Set your default browser in Windows Settings -> Apps -> Default apps
+       if you want future launches to select it automatically.
+
+  05.10 Optional read-only health checks in a SECOND PowerShell window:
+
+       Invoke-RestMethod "http://127.0.0.1:8001/api/health"
+       Invoke-RestMethod "http://127.0.0.1:8001/api/ready"
+       Invoke-RestMethod "http://127.0.0.1:3000/api/health"
+
+       These should return successful JSON. /ready pings MongoDB; it does not
+       generate AI, synthesize speech or create a Stripe payment. The last
+       URL checks the frontend's same-origin API proxy. The old Arena-served
+       backend may differ from this downloaded source; test your NEW local
+       address, not the old Arena preview.
+
+  05.11 Keep the launcher console open while using the app. Closing it can
+       stop its web servers. MongoDB is intentionally kept separate.
+
+  05.12 Once startup is successful, continue with real service configuration.
+       Merely reaching the home page does not prove Google, AI, TTS, mail,
+       Stripe or durable cloud media is configured/verified.
+
+HOW TO OPEN POWERSHELL FOR THE OPTIONAL COMMANDS IN THIS GUIDE:
+
+  - In File Explorer open the ACTUAL project root containing install.py.
+  - Click the folder address bar, type powershell and press Enter.
+  - Run Get-Location if uncertain; the result should be that project folder.
+  - Do not type the visible PS C:\...> prompt as part of a command.
+  - Commands starting with .\ mean a file INSIDE your current folder.
+  - Paste each shown command as one line and wait for it to finish. Do not
+    paste explanations, angle-bracket placeholders or a whole section.
+  - Do not automatically run as Administrator; use ordinary per-user setup.
+  - You only need a terminal for optional setup/diagnostics/private helper
+    work. Normal prepared Windows launch is still just thelaunch.bat.
+
+OPTIONAL: prepare dependencies without starting servers:
+
+       .\install.bat --skip-mongodb
+
+This checks/prepares the software and missing configuration but does not
+start the web app or a database. It is useful for cloud-only helper setup.
+If this same local app is already running, setup-only/repair commands can
+refuse to alter it: stop only its web console first, leave MongoDB running.
+
+SOURCE-ONLY WINDOWS ALTERNATIVE (NO PREPARED runtime/ DIRECTORY):
+
+  1. Use a complete CURRENT source extraction in a new writable folder.
+     Preserve authoritative existing configuration/data as in Section 03.
+     The OS/CPU and database compatibility requirements still apply.
+  2. Make sure internet and adequate disk/build headroom are available.
+     Source-only installation really does download/install dependencies and
+     build React. It is not an offline preinstalled bundle.
+  3. Double-click thelaunch.bat, just as for the prepared version. The verified
+     bootstrap can discover/install a supported x64 Python without requiring
+     you to install Python manually first. It then prepares a project .venv,
+     locked packages, compatible Node/Yarn and local Mongo when needed.
+     Follow the legitimate prompts and leave the console open.
+  4. If you ALREADY have a working supported Python, this is an alternative
+     in PowerShell at the source root, not an extra simultaneous launcher:
+
+       python install.py --start
+
+     Or python start.py / python Launcher.py. Check python --version first;
+     it must be a supported 3.11-3.13 interpreter, x64 on Windows, not a Store
+     placeholder. Prefer the BAT if interpreter selection is uncertain.
+  5. To prepare only with a working interpreter, use python install.py.
+     To require an already configured/reachable database when starting, use
+     python install.py --start --skip-mongodb. The flag does not supply a
+     remote Mongo URI or fix database network access for you.
+  6. Complete Section 06, reopen http://127.0.0.1:3000 and perform the same
+     health checks. This is still a real local Node proxy + Python API + Mongo
+     installation, not an Arena-hosted website. Do not manually start another
+     uvicorn/Node instance while the launcher owns those ports.
+
+==========================================================================
+06. LOCAL CONFIGURATION AND REAL AI / VOICE PROVIDERS
+==========================================================================
+
+EDIT THE RIGHT FILE:
+
+  - Backend secrets/settings: project-root\backend\.env
+  - Public frontend/build options: project-root\frontend\.env
+  - .env.example is a template, NOT the active private configuration.
+
+In File Explorer enable View -> Show -> File name extensions. Do not
+accidentally save the file as .env.txt. Use a local text editor such as
+Notepad; keep private copies out of Git and public folders/screenshots.
+
+For an existing installation, preserve correct values. Do NOT replace the
+whole existing .env with a blank example. For a fresh local install the
+launcher has already created its missing env files and persistent secret.
+
+Useful fresh local BACKEND settings:
+
+  MONGO_URL=mongodb://127.0.0.1:27017
+  DB_NAME=da_roastbox_preview
+  APP_ENV=development
+  STORAGE_BACKEND=local
+  APP_BASE_URL=http://127.0.0.1:3000
+  STRIPE_TEST_ONLY=true
+  ENABLE_PAID_DIAGNOSTICS=false
+  ALLOW_DEV_LOGIN=false
+  ALLOW_SOURCE_DOWNLOAD=false
+
+DB_NAME above is a FRESH-PREVIEW example only. Existing users must keep the
+actual authoritative name. Keep existing LOCAL_STORAGE_DIR if one is set.
+Do not set beta/production on an HTTP localhost configuration just to sound
+more deployed: release mode requires HTTPS/remote TLS storage safeguards.
+
+For genuine hosted writing and OpenAI speech, put your existing correct
+private provider values in backend\.env. Required names:
+
+  OPENROUTER_API_KEY=     [your actual private OpenRouter value]
+  OPENAI_API_KEY=         [your actual private OpenAI value]
+
+The bracketed explanations are NOT literal values. Replace the complete
+explanation with the actual value, or use your existing correct entries.
+Do not paste a key here into chat, the frontend .env, a public repo, or a
+REACT_APP_* variable.
+
+Retain this approved writer configuration:
+
+  AI_DEFAULT_PROVIDER=openai
+  ROAST_WRITER_PROVIDER=openrouter
+  ROAST_WRITER_PROFILE=multimodal
+  ROAST_OPENROUTER_MODELS=anthropic/claude-sonnet-4.5,openai/gpt-4.1,openai/gpt-4o
+  ROAST_BACKUP_PROVIDERS=emergent,openai
+  ROAST_FREE_WRITER_ONLY=false
+  ROAST_ALLOW_PAID_WRITER_FALLBACK=true
+  ROAST_POLLINATIONS_FALLBACK=false
+  TTS_MODEL=gpt-4o-mini-tts
+
+AI_DEFAULT_PROVIDER does not override the explicit OpenRouter writer setting.
+Only genuinely configured backups are usable. Keep EMERGENT_LLM_KEY only if
+you actually use the existing gateway backup. Do not invent a gateway key.
+Direct OpenRouter/OpenAI operation does not require an Arena tab to stay open.
+
+Legacy Nemotron/Venice/free-profile variables may remain for compatibility
+in the sample/source. They are NOT the approved multimodal model chain and
+should not be substituted for it to make a missing paid key appear to work.
+Do not guess smaller token budgets/timeouts or change tuned existing values
+merely to label output faster. Provider availability/moderation still applies.
+
+Optional:
+
+  ELEVENLABS_API_KEY=     [only if you use genuine hosted ElevenLabs voices]
+
+The application also supports entitled user BYOK settings. Keep their
+original encryption secret and ownership/entitlement checks. Actual fallback
+voice/model reporting is not a guarantee of the requested vendor on failure.
+
+Explore flags in the supplied private beta/local preview can be:
+
+  ENABLE_PREVIEW_LOGIN=true
+  ALLOW_PREVIEW_HOSTED_AI=true
+  PREVIEW_UNLIMITED_CREDITS=true
+  PREVIEW_HOSTED_DAILY_SHOW_LIMIT=-1
+  PREVIEW_HOSTED_DAILY_VOICE_LIMIT=-1
+
+ALLOW_PREVIEW_HOSTED_AI is false in a cautious fresh local example until you
+explicitly enable it. Enabling the whole group allows preview provider use.
+Preview credits/app daily-limit behavior does NOT make provider usage free,
+remove normal-user entitlements or reset normal balances. This group is not
+appropriate for an open public/production installation.
+
+Local frontend settings normally include:
+
+  REACT_APP_BACKEND_URL=
+  REACT_APP_ENABLE_PREVIEW_LOGIN=true
+  REACT_APP_SOURCE_DOWNLOAD_ENABLED=false
+
+Empty backend URL means same-origin /api through the local Node proxy. Do
+not enter the old Arena URL. API_PROXY_TARGET is a SERVER/dev proxy address,
+not a browser secret or cloud production backend URL.
+
+After editing backend .env:
+
+  1. Save the file.
+  2. In your existing launcher console press Ctrl+C to stop its web servers.
+  3. Leave MongoDB and its data folder alone.
+  4. Double-click thelaunch.bat again.
+
+After changing frontend public variables/source, the launcher may need a
+real rebuild and internet for frontend dependencies. That is expected when
+the shipped build no longer matches the selected configuration.
+
+Local media, billing, authentication and consent still need their own checks.
+An API key being present is not proof of available credits/model access or
+successful external connectivity. Do not trigger an AI show/voice sample as
+a routine startup probe; approve any billable test separately.
+
+==========================================================================
+07. DAY-TO-DAY LOCAL STARTUP, SHUTDOWN, SHORTCUTS AND REPAIRS
+==========================================================================
+
+NORMAL START:
+
+  Double-click thelaunch.bat in the same extracted project folder.
+  It reuses intact runtimes/builds and opens the default browser after
+  readiness. An already-running matching app is reused, not duplicated.
+
+NORMAL STOP:
+
+  Press Ctrl+C in THAT app's launcher console. Its own API/frontend processes
+  stop. MongoDB is deliberately left running. Do not use a broad taskkill
+  command, kill every Python/Node process, or stop mongod to fix the UI.
+
+DESKTOP SHORTCUT:
+
+  Right-click the actual thelaunch.bat -> Show more options / Send to ->
+  Desktop (create shortcut), or use Windows' Create shortcut action.
+  Keep the shortcut target pointing to the BAT INSIDE the app folder.
+  Its Start in location should be the project root. Do not copy just the BAT
+  onto the Desktop or out of the extracted tree.
+
+OPTIONAL COMMANDS (PowerShell, opened IN the project root):
+
+  .\start.bat --no-browser
+      Start without automatically opening the browser.
+
+  .\start.bat --skip-mongodb
+      Use only your reachable configured database. This does not download
+      or start a portable database and does not fix an unreachable URI.
+
+  .\start.bat --port 3050
+      Explicitly choose frontend port 3050 if you have an intentional clash.
+      The API still uses its configured/default port. Do not randomly cycle
+      ports to avoid understanding which existing service owns them.
+
+  .\start.bat --api-port 8011
+      Explicitly choose a different API port. The local proxy follows it.
+      Frontend/API ports must be different; never use 27017 for the website.
+
+  .\start.bat --repair
+      STOP THE APP'S WEB WINDOW FIRST; LEAVE MONGODB RUNNING.
+      Reinstall packages in a separate venv and force a frontend rebuild.
+      This can need internet, time, RAM and 4 GiB+ working space. It is not
+      the normal first step for a database/key problem or disk-full retry.
+
+  python start.py
+  python Launcher.py
+      Equivalent setup/start paths IF a supported Python can already run.
+      A .py file cannot execute itself when Python is missing. Prefer BAT
+      for no-prerequisite double-click use.
+
+DISCOVERY:
+
+  The launcher checks its project runtime/cache, supported installed Python,
+  PATH, known registry/fixed-drive locations and explicit dependency overrides.
+  It does not recursively search all your drives or read unrelated private
+  documents/credentials. Missing programs can be downloaded with verification.
+
+  Advanced override names, only when deliberately needed:
+    ROASTBOX_PYTHON_EXE, ROASTBOX_NODE_EXE, ROASTBOX_MONGOD_EXE.
+  Paths must point to compatible working executables, not arbitrary folders.
+
+DATA / LOCAL NETWORK CAUTION:
+
+  - Keep the computer awake and the web window open during generation/reels.
+  - Runtime caches and media can grow. Back up before any manual cleanup.
+  - The frontend retains a 0.0.0.0 binding for LAN/preview compatibility;
+    localhost use alone is not a hardened public-server configuration.
+  - Do not port-forward the app, API or MongoDB through your router.
+  - Do not open database port 27017 to the internet.
+  - For trusted LAN experiments, use the PC's private address, explicitly
+    review firewall/origin/auth settings and allow only the intended private
+    network. HTTP LAN access can break secure OAuth/cookie expectations.
+    This guide's recommended public/remote path is Render HTTPS instead.
+
+==========================================================================
+08. GOOGLE, EMAIL LOGIN AND INDEPENDENCE FROM ARENA
+==========================================================================
+
+There are three separate concepts:
+
+  - The extra BETA PASSWORD protects an external private-beta site.
+  - The 21+ CONSENT gate controls explicit access to adult content.
+  - NORMAL ACCOUNT AUTHENTICATION identifies the user and protects records.
+
+One is not a replacement for the others.
+
+08.A GOOGLE - EXISTING MANAGED FLOW
+
+  The frontend uses a managed service at:
+
+    https://demobackend.emergentagent.com/auth/v1/env/oauth
+
+  It sends a same-origin /auth-complete.html callback with state/mode and
+  retains the legacy /auth/callback route. The backend exchanges the one-time
+  session ID with that provider and establishes its own account session.
+
+  For local use, the callback must return to YOUR selected localhost origin,
+  such as http://127.0.0.1:3000/auth-complete.html, not an old Arena address.
+  For Render, it must return to YOUR actual HTTPS domain with that path.
+
+  Steps:
+    1. Use one consistent site origin; do not alternate localhost and
+       127.0.0.1 while completing a login.
+    2. Keep the callback file/routes from the supplied source.
+    3. Verify that the existing managed provider accepts the new origin and
+       callback. Use its owner/support/configuration process if required.
+    4. Allow a legitimate login popup, or use the implemented redirect path
+       if the popup is blocked.
+    5. Confirm return to your own site, correct existing account and original
+       credits/history. Do not merge ambiguous accounts or create credits
+       to hide an account-linking problem.
+
+  IMPORTANT: there is no documented independent Google-client substitution
+  wired into this version. Adding a Google client ID/secret to .env does not
+  magically replace managed auth. If the provider will not allow your new
+  origin, Google portability is a real blocker needing provider approval or
+  a separately implemented/reviewed auth change. Do not claim it is fixed by
+  connecting Supabase, disabling state checks or adding an invented key.
+
+  Google/Explore working at an old preview origin does not certify a new
+  Render origin. The app can run outside Arena while still relying on this
+  external managed provider; that is not complete vendor independence.
+
+08.B FIRST-PARTY EMAIL / PASSWORD - ALREADY IMPLEMENTED
+
+  Email registration/reset needs REAL delivery, a suitable sender and the
+  correct APP_BASE_URL. It is not a fake successful email form.
+
+  Recommended Render Free configuration uses HTTPS Resend:
+
+    EMAIL_AUTH_ENABLED=true
+    EMAIL_TRANSPORT=resend
+    RESEND_API_KEY=        [your existing approved server-private mail key]
+    EMAIL_FROM=           [your actual verified sender address]
+
+  Set APP_BASE_URL to the actual public HTTPS origin on Render, or your
+  selected local HTTP origin for a local-only development setup.
+
+  Resend setup, when YOU have selected/approved that provider:
+    1. Use the intended existing account/workspace.
+    2. Review the current free allowance, usage limits and sender rules.
+    3. Open Domains and add/choose a domain or subdomain you control.
+    4. Copy the exact DNS records shown by Resend into that domain's DNS.
+       Typical verification involves SPF/DKIM. Use the actual supplied
+       values, not a fabricated record or another provider's settings.
+    5. Do not create duplicate/conflicting SPF records at one hostname;
+       have the domain administrator merge policies correctly when needed.
+    6. Wait for domain verification. Configure an appropriate DMARC policy
+       with the domain administrator; do not change existing mail routing
+       blindly or remove unrelated MX records.
+    7. Create/use an appropriately scoped sending key and keep it backend-only.
+    8. Set EMAIL_FROM to an allowed verified sender, not an arbitrary Gmail
+       address or an unverified domain.
+    9. Add the settings privately, restart local web servers or manually
+       redeploy Render, then inspect capability status.
+   10. Only after approving real delivery, perform an owner-controlled inbox
+       test. Registration verifies mailbox ownership before setting a
+       password; reset/verification links are short-lived/single-use.
+
+  If you do not own a suitable existing domain/provider, do not promise
+  public email delivery, start a paid domain/account, or disable verification
+  just to make the button appear to work. Default/test senders can be limited
+  to your own account recipients. Keep email disabled until genuinely ready.
+
+  Local SMTP is supported when deliberately configured:
+
+    EMAIL_AUTH_ENABLED=true
+    EMAIL_TRANSPORT=smtp
+    SMTP_HOST=            [your actual approved mail server]
+    SMTP_PORT=587
+    SMTP_TLS_MODE=starttls
+    SMTP_USERNAME=        [actual private username]
+    SMTP_PASSWORD=        [actual private password/app password]
+    SMTP_FROM=            [actual allowed sender]
+
+  Port 465 with SMTP_TLS_MODE=ssl is the other supported encrypted mode.
+  Follow your actual provider's requirements; do not use plaintext transport.
+
+  DO NOT use SMTP 25/465/587 for Render Free: those outbound ports are blocked.
+  Use approved HTTPS delivery there, or leave optional email off.
+
+  For a protected beta, unlock the extra beta gate in that browser before
+  following a verification/reset link. Do not remove the gate or share tokens.
+
+  Account sign-in capability and registration/recovery DELIVERY capability
+  are distinct. A configured key/status flag does not prove inbox delivery.
+  Password reset revokes account sessions. Do not rotate JWT as a reset fix.
+
+==========================================================================
+09. STRIPE TEST - LOCAL FORWARDING AND CLOUD WEBHOOK SETUP
+==========================================================================
+
+This source uses server-hosted Checkout redirects. It does not require adding
+Stripe.js or a publishable key to the frontend. Plus/VIP offers in the current
+source are one-time 30-day passes, not auto-renewing subscription setup.
+
+Required backend settings:
+
+  STRIPE_TEST_ONLY=true
+  STRIPE_API_KEY=         [your existing genuine TEST server key]
+  STRIPE_WEBHOOK_SECRET=  [the signing secret for THIS endpoint/listener]
+
+Use sk_test_ or suitably permitted rk_test_ credentials, not live keys.
+Provider secret keys and whsec_ signing secrets are different things.
+Do not copy a webhook secret from a different URL or substitute a publishable
+key for the server secret. Preserve existing transaction/idempotency records.
+
+09.A OPTIONAL LOCAL WEBHOOK LISTENER
+
+  A website on your own 127.0.0.1 is not directly reachable by Stripe.
+  You do not need an Ngrok signup/token for this. The official Stripe CLI
+  can forward TEST snapshot events to the existing local backend.
+
+  Only if YOU choose to configure local Stripe forwarding:
+    1. Download/install the official Stripe CLI for your OS (reference S2).
+       It is not one of the application runtime binaries in the ZIP.
+    2. In your own terminal run:
+
+       stripe login
+
+       Approve the correct existing account and TEST context in the browser.
+       Do not add --live, activate real sales, or switch app TEST protection off.
+    3. Start the local app, and in another terminal run this ONE LINE:
+
+       stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.expired,checkout.session.async_payment_failed --forward-to http://127.0.0.1:8001/api/payments/webhook
+
+    4. The CLI displays its signing secret. Put THAT value privately in the
+       LOCAL backend\.env STRIPE_WEBHOOK_SECRET entry.
+    5. Restart only the app's web servers so the backend loads the setting.
+       Keep the Stripe CLI forwarding window running while you use it.
+    6. If you intentionally use a different API port, update --forward-to.
+       The listener does not need MongoDB exposed or a browser API-key field.
+
+  Listening does not create a checkout or grant credits. Do not use a generic
+  stripe trigger event as proof of application purchase fulfillment: the app
+  requires its own tracked Checkout session/owner/amount/TEST validation.
+
+09.B RENDER / PUBLIC HTTPS WEBHOOK
+
+  Configure after Render has assigned your REAL hostname:
+
+    https://YOUR-ACTUAL-HOST/api/payments/webhook
+
+  Steps in the correct Stripe TEST dashboard/sandbox:
+    1. Open Workbench -> Webhooks / Event destinations (older dashboards may
+       show Developers -> Webhooks).
+    2. Choose to create/add a destination for YOUR account's events.
+    3. Select SNAPSHOT payloads. This source reads event.data.object and is
+       not a newly implemented Thin-event fetcher. Do not choose Thin merely
+       because current Stripe documentation recommends it for new designs.
+    4. Select these handled events:
+
+       checkout.session.completed
+       checkout.session.async_payment_succeeded
+       checkout.session.expired
+       checkout.session.async_payment_failed
+
+    5. Choose Webhook endpoint and enter the exact Render HTTPS URL above.
+       Do not use localhost, /credits/success, /api/health or an old deployment.
+    6. Select a snapshot API version compatible with your Checkout integration
+       and record the choice. Do not casually change event format/version.
+    7. Save the TEST destination, reveal its endpoint signing secret, and set
+       STRIPE_WEBHOOK_SECRET in Render's private Environment settings.
+    8. Keep STRIPE_TEST_ONLY=true and your genuine TEST STRIPE_API_KEY.
+    9. Manually deploy/restart through Render's supported workflow to load it.
+   10. Keep the old deployment's endpoint unchanged if it is still responsible
+       for old purchases. Plan cutover deliberately; do not delete/recreate
+       old endpoint/settlement records or regrant a historical transaction.
+
+  This webhook is exempt from only the extra beta-password form. It still
+  checks the Stripe signature, tracked ownership/product, payment, amount,
+  currency and TEST mode. A GET request to that POST route can return 405;
+  that is not a failed webhook setup.
+
+  Returning to /credits/success does not itself grant credits. Do not credit
+  users manually because a browser closed, a notification is delayed, or a
+  historical receipt is absent from a recovered snapshot.
+
+  A new genuine TEST Checkout or paid AI/voice test is OPTIONAL and requires
+  your explicit new approval/budget. It is not part of installation here.
+  If you choose one, use only Stripe's documented TEST data, inspect the
+  original tracked transaction, and verify fulfillment happens once. Do not
+  create another checkout merely to poll/retry an existing purchase.
+
+==========================================================================
+10. LOCAL TROUBLESHOOTING BY SYMPTOM
+==========================================================================
+
+"The browser does not load on 27017"
+  That port is MongoDB. Open http://127.0.0.1:3000 instead. Do not move/stop
+  the database to make 27017 a web page.
+
+"The launch file says project files are missing"
+  Extract the entire ZIP and launch from the folder containing install.py.
+  Do not run inside the ZIP viewer or copy only the BAT out of the folder.
+  Check for an extra inner project folder after extraction.
+
+"Nothing happens when I double-click start.py"
+  A Python file needs a working interpreter/association. Use thelaunch.bat.
+  Do not install unrelated Store launchers or copy Linux Python files.
+
+"Python is missing or Microsoft Store opens"
+  The BAT bootstrap avoids the Store placeholder, searches supported x64
+  Python 3.11-3.13 and normally uses the bundled interpreter. If that runtime
+  is missing/corrupt, it can fetch the pinned official installer with SHA256
+  and publisher checks. Extract a complete trusted ZIP first.
+
+"Python publisher/signature/hash verification failed"
+  Do not bypass verification. Check archive checksum, complete extraction,
+  Windows date/certificate updates, security policy and your trusted network.
+  Ask an administrator if a managed system blocks the trusted program.
+
+"Missing packages / No module named fastapi / No module named pip"
+  You may have launched the wrong global Python or not unpacked the payload.
+  Use the BAT, not a random global pip command. For genuine damage, stop only
+  the web app and use --repair. Do not pip-install into the sealed runtime
+  by hand or delete data to fix package imports.
+
+"[WinError 112], [Errno 28], disk full or quota exceeded"
+  Check BOTH project drive and Windows/system drive, plus any quota. Example:
+
+    Get-PSDrive -PSProvider FileSystem
+
+  Free space deliberately; rerun normal launch. Do not automatically purge
+  all caches, delete .data\mongo/media, or repeatedly --repair a full disk.
+
+"Frontend/API port already occupied"
+  Inspect before changing anything. Read-only PowerShell command:
+
+    Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in @(3000,8001,27017) } | Select-Object LocalAddress,LocalPort,OwningProcess
+
+  Identify the owning PID in Task Manager. Reuse the correct app or close
+  only your own conflicting web window. Do not kill all Node/Python/Mongo
+  processes. Use explicit port overrides only if intentionally needed.
+
+"MongoDB cannot start / DLL / AVX / unsupported CPU error"
+  Check Windows x64/CPU support and complete extraction of the app-local C++
+  files. Read the visible startup message and .data\mongo-27017.log. A source
+  fallback can need Microsoft's legitimate runtime installer. Do not delete
+  the database or try to force an incompatible CPU/OS to run it.
+
+"The app is empty; my old account/history is missing"
+  A new ZIP is not a backup. Verify the ACTUAL MONGO_URL, DB_NAME, original
+  JWT_SECRET and media store. Follow Section 17 for an approved transfer.
+  Do not create compensating credits, checkouts, fake history or new audio.
+
+"The home page opens but generation or speech fails"
+  Check actual private provider keys, model permissions, budget/credits,
+  provider status and the correct environment file. Explore app credits do
+  not pay external providers. A 429/provider refusal is not fixed by changing
+  models silently or removing Clean/off-limits/entitlement/21+ checks.
+
+"Google returns to Arena/old deployment, or login is rejected"
+  Use the current source/build, correct chosen origin and callback routes.
+  Verify managed provider origin acceptance. Existing browser sessions are
+  origin-specific; reauthenticate. Clearing only this browser site's cache/
+  session can log you out but does not repair/migrate a database. Never
+  delete server data or disable OAuth state checks as a login fix.
+
+"No email arrives"
+  Inspect actual email capability, sender/domain verification, correct
+  APP_BASE_URL, mail provider logs and spam filtering. Do not assume test
+  senders deliver to arbitrary users. Render Free requires HTTPS delivery,
+  not SMTP on its blocked ports. Never fake success or skip verification.
+
+"No intro sound / download blocked"
+  Focus the standalone browser page and use a real tap/Enter/Space. Check site
+  sound permissions and device mute. For MP4 downloads allow the legitimate
+  browser download and use a full browser tab, not a restricted embedded view.
+
+"A generation/reel is slow or the browser disconnected"
+  Do not immediately resubmit. Check Recent shows/reel status and account
+  state first; the provider may already have billed or work may have finished.
+  Use existing progress/recovery controls instead of creating duplicate jobs.
+
+==========================================================================
+11. OPTIONAL MACOS / LINUX LOCAL SETUP
+==========================================================================
+
+The shipped Windows EXEs do NOT run on macOS/Linux. Use the source installer
+and native dependencies. This is a secondary path, not a physical-platform
+certification or a claim that every distribution is supported.
+
+  11.1 Extract the complete project into a new writable folder.
+  11.2 Preserve existing .env, data and media as in Section 03.
+  11.3 Have supported Python 3.11, 3.12 or 3.13 installed.
+       - Debian 12 normally provides compatible Python 3.11.
+       - Ubuntu 24.04 normally provides compatible Python 3.12.
+       - Ubuntu 22.04's default Python 3.10 is NOT sufficient. Install a
+         supported interpreter through an approved trusted method first.
+       - Do not assume a newer OS default such as Python 3.14 is accepted.
+       - Debian/Ubuntu can need the matching python3-venv package.
+       - On macOS with an already approved Homebrew setup, python@3.13 is
+         one supported interpreter option. Follow its PATH instructions.
+  11.4 In a terminal, change to the actual extracted project root:
+
+       cd "/YOUR/ACTUAL/PATH/da_roastbox"
+       sh ./start.sh
+
+       Do not type the example path literally. The script can prompt for
+       apt/Homebrew assistance; approve system changes only deliberately.
+  11.5 It prepares native Python packages, Node, Yarn, FFmpeg and a supported
+       Mongo target. Internet/build headroom is needed, unlike prepared
+       Windows first-run dependency unpacking.
+  11.6 Use the same backend/frontend configuration principles and open the
+       printed local web URL. Keep the console open; Ctrl+C stops web servers,
+       not the separate saved database.
+
+Supported Mongo targets are OS/CPU/library-specific. Older macOS, arbitrary
+Linux distributions and unsupported architectures may need a separately
+configured supported external MongoDB. Do not turn off TLS or substitute SQL.
+
+You do NOT need Docker Desktop on your PC for the Render route below:
+Render builds the supplied Dockerfile itself from GitHub.
+
+==========================================================================
+12. RENDER OVERVIEW AND PREPARATION CHECKLIST
+==========================================================================
+
+Goal: ONE Free Render Docker web service, one instance, one Uvicorn worker,
+external certificate-verified MongoDB and private durable remote media.
+
+Do not create a Static Site for the full app. Do not run a local Mongo server
+inside Render Free. Do not store customer uploads/reels only in the container.
+Do not add Free Render Postgres: this application uses MongoDB, and Free
+Postgres expires after 30 days. A connected Supabase project is not a Mongo
+URI, an automatic auth replacement or an implemented SQL migration.
+
+Render Free restrictions described by Render (reference R1):
+
+  - Spins down after 15 minutes without inbound HTTP/WebSocket traffic.
+  - A request wakes it; Render describes an approximately minute-long wakeup.
+  - Local filesystem changes can disappear on restart/redeploy/spin-down.
+  - No persistent disk, normal shell/SSH access or one-off jobs on Free.
+  - 750 Free instance-hours per workspace/month, shared across Free services.
+  - Bandwidth/build quotas apply. Overage can bill if a payment method exists,
+    or suspend services/builds when no method/allowed spend remains.
+  - Heavy service-initiated external traffic can cause suspension.
+  - SMTP outbound 25/465/587 is blocked.
+
+Review current allowances/spending controls in YOUR dashboard. Do not create
+keepalive loops to defeat sleep, assume unlimited resources, start a paid
+trial or upgrade automatically to make an error disappear. Free hosting is
+for a restricted beta; live payments/store/production need separate review.
+
+YOU WILL NEED, USING APPROVED EXISTING ACCOUNTS WHERE AVAILABLE:
+
+  [ ] Current app SOURCE in a clean local folder.
+  [ ] An owner-selected GitHub repository you can authorize Render to read.
+  [ ] A Render workspace where the actual service is explicitly Free.
+  [ ] Authoritative external TLS MongoDB, or an approved empty new target.
+  [ ] A PRIVATE compatible Blob store, and confirmed plan/use eligibility.
+  [ ] Existing persistent JWT_SECRET if preserving encrypted user data.
+  [ ] Extra beta password verifier and separate signing key.
+  [ ] Real OpenRouter/OpenAI keys with owner-set usage controls.
+  [ ] Existing genuine Stripe TEST API key and THIS origin's webhook secret.
+  [ ] Managed Google new-origin acceptance, or properly configured supported
+      email authentication; do not pretend a blocked Google flow is verified.
+  [ ] Optional approved HTTPS email provider and verified sender/domain.
+  [ ] Backups, a data/media decision and a deliberate cutover plan.
+
+No account/resource was created or connected simply by writing this guide.
+Creating a new provider account/cluster/store/repository remains YOUR explicit
+choice, subject to current terms. If a required Free option is not available,
+stop that path rather than accepting a paid default or hiding missing storage.
+
+==========================================================================
+13. PREPARE THE CURRENT SOURCE SAFELY FOR GITHUB
+==========================================================================
+
+Use a NEW owner-chosen source folder/repository, not an older V3/V4 project
+or the only copy of your current native installation/data.
+
+METHOD A - use the current extracted prepared Windows source:
+
+  13.1 Keep the original extracted package/backups intact.
+  13.2 Work from a clean source handoff copy, or use the supplied sanitized
+       source packager after dependencies are prepared. The following local
+       PowerShell setup selects a PROJECT interpreter for helper commands:
+
+       $Py = Join-Path (Get-Location) "runtime\windows-x64\python\python.exe"
+       if (-not (Test-Path $Py)) { $Py = Join-Path (Get-Location) ".venv\Scripts\python.exe" }
+       if (-not (Test-Path $Py)) { throw "Prepare the app first with install.bat --skip-mongodb." }
+
+       Run this from the actual project root. If you have not prepared its
+       dependency payload yet, run .\install.bat --skip-mongodb first.
+       If already installed and running, use the prepared interpreter without
+       rerunning setup. $Py only exists in that PowerShell session; recreate
+       the variable in a new terminal. Prefix commands with & $Py as shown.
+       If your launcher reports using the separate repair .venv, explicitly
+       select that WORKING interpreter instead before running helper commands:
+
+       $Py = Join-Path (Get-Location) ".venv\Scripts\python.exe"
+
+  13.3 Optional, RECOMMENDED source export, outside the project folder:
+
+       if (Test-Path "..\Da_RoastBox_Render_Source_Current.zip") { throw "Choose a NEW export filename; keep the earlier archive." }
+       & $Py scripts\package_source.py --flat "..\Da_RoastBox_Render_Source_Current.zip"
+
+       This reads source and creates a separate sanitized source ZIP. It
+       excludes Windows runtime/, .env, caches, .private, databases, installed
+       dependencies and customer media. It does NOT migrate any data.
+       A heuristic scan is helpful, not a guarantee; inspect the result.
+
+  13.4 Extract that source ZIP into another clean folder, for example:
+
+       C:\RoastBox\render_upload
+
+       Do not put this inside the original live app. Do not merge customer
+       env/data back into this clean upload folder. Keep filled deployment
+       settings in .private or another protected location, never in Git.
+
+METHOD B - Git directly from a clean current source extraction:
+
+  The included .gitignore excludes runtime/, .cache/, .data/, .venv/, .private,
+  private .env files, local_storage, audio_cache and generated media work.
+  frontend/.gitignore excludes frontend/build and node_modules. .dockerignore
+  also excludes Windows runtimes/data from the Linux Docker build context.
+  KEEP these ignore files. Do not override them with git add -f.
+
+DO NOT:
+
+  - Commit the 117 MB Windows ZIP, runtime payload or vendor EXEs to GitHub.
+  - Use a public upload containing backend/.env or customer records/media.
+  - Upload the ZIP as the ONLY repository file and expect Docker to find it.
+  - Copy only frontend/ while omitting backend/, Dockerfile or render.yaml.
+  - Copy your live Mongo .data folder into a source repository.
+
+Required files at repository ROOT (not hidden in an unintended extra folder):
+
+  Dockerfile
+  render.yaml
+  .dockerignore
+  .gitignore
+  backend/server.py
+  backend/requirements-runtime.txt
+  frontend/package.json
+  frontend/yarn.lock
+  frontend/src/
+  frontend/public/
+  scripts/
+  deploy/entrypoint.sh
+  deploy/render.env.example
+
+Retain .github files if using the optional manual test workflows. They are
+owner-triggered, not automatic deployment/payment/generation permissions.
+
+==========================================================================
+14. CREATE / CONNECT THE CORRECT GITHUB REPOSITORY
+==========================================================================
+
+Use your existing approved GitHub account. Prefer a NEW PRIVATE repository
+with an unambiguous name. Do not overwrite another working app repository.
+
+GITHUB DESKTOP ROUTE (often easiest):
+
+  14.1 Install/use GitHub Desktop from its official source if needed.
+  14.2 Sign into your intended existing account.
+  14.3 Add/Create a local repository for the CLEAN source folder from
+       Section 13, not the live data folder.
+  14.4 Inspect every changed/staged filename. None may be .env, .private,
+       .data, runtime, node_modules, media archives or customer files.
+  14.5 Commit the clean source with a descriptive message.
+  14.6 Publish it as PRIVATE to the intended account/organization.
+  14.7 In the browser, inspect the repository root. Dockerfile/render.yaml
+       must be directly visible, plus backend/frontend/scripts/deploy.
+
+GIT COMMAND ROUTE (alternative, not an additional duplicate repository):
+
+  Open PowerShell IN your clean source folder, then:
+
+    git --version
+    git init
+    git branch -M main
+    git status --short
+
+  If Git asks for identity, configure it for THIS repository using YOUR real
+  name/email. Do not use an API key as a username/password or commit tokens.
+
+    git config user.name "YOUR NAME"
+    git config user.email "YOUR GIT COMMIT EMAIL"
+
+  Stage, then REVIEW before committing:
+
+    git add .
+    git diff --cached --name-only
+
+  STOP if any private env/data/runtime/customer files appear. Fix staging and
+  ignore rules before committing; never push a secret to see whether it works.
+  If a secret was exposed, use the provider's deliberate incident/rotation
+  procedure; removing one file does not remove it from Git history. JWT/key
+  encryption migration needs special care; do not rotate it casually.
+
+  If the staged contents are correct:
+
+    git commit -m "Prepare Da RoastBox private Render beta"
+
+  In GitHub's browser, create the intended NEW PRIVATE repository. If pushing
+  this already-initialized folder, do not add a conflicting starter README/
+  license/.gitignore on GitHub. Copy YOUR real repository URL, then:
+
+    git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git
+    git push -u origin main
+
+  Replace YOUR_ACCOUNT/YOUR_REPOSITORY. Use browser/credential-manager auth.
+  Do not paste a personal token into a tracked file or a shared terminal log.
+  Do not force-push over an existing project to fix a conflict.
+
+GitHub's browser uploader is possible, but extract FIRST, preserve directory
+structure and hidden ignore files, and observe current upload limits. Git or
+Desktop is preferable. A cloud source export is small; the prepared Windows
+runtime is not a repository dependency.
+
+Keep unrelated automated workflows/deploy hooks off until intentionally
+reviewed. The supplied release workflows are manual; running them can still
+consume your account's build minutes.
+
+==========================================================================
+15. EXTERNAL TLS MONGODB / ATLAS SETUP
+==========================================================================
+
+If you already have the approved authoritative external MongoDB, USE IT
+without an unnecessary export/restore, after reviewing worker/cutover safety.
+Keep the correct DB_NAME, credentials and JWT. Do not create a second empty
+cluster merely because a tutorial has a Create button.
+
+If YOU choose an approved NEW empty Free target, MongoDB Atlas Free is one
+compatible option. Current Atlas terminology can show Free or M0. Do not
+choose Flex, dedicated/paid compute or a trial by mistake. Review actual
+storage/connection/backup/network limits and whether a Free option is offered
+in your selected account/region. Dashboard labels can change (reference M1).
+
+MANUAL ATLAS STEPS:
+
+  15.1 Sign into the intended existing Atlas account/organization/project.
+       An Atlas website login is NOT the same as an app database user.
+
+  15.2 Select the correct existing approved Free cluster, or create a new one
+       only after choosing a genuinely empty destination. Confirm Free/M0
+       in the final review. Do not load sample data into a migration target.
+
+  15.3 Choose a supported region reasonably close to Render. Region locality
+       can reduce latency, but does not replace quota/eligibility checks.
+
+  15.4 Under Security / Database Access, create or select an APP database user.
+       Use a strong unique password in your secret manager. Grant only the
+       needed permissions on the intended application database, normally
+       readWrite there, rather than unrelated global admin privileges.
+       Migration/export operators may need separately reviewed tool roles.
+
+  15.5 Under Network Access / IP Access List, allow the actual authorized
+       clients. For migration from your computer, add your current public IP
+       temporarily as needed. That alone does NOT allow the Render service.
+
+  15.6 After a Render service exists, open its Connect menu -> Outbound tab.
+       Copy its ACTUAL outbound CIDR ranges and add those to Atlas's IP
+       access list. Use the ranges for that selected service/region; do not
+       hardcode old addresses from a tutorial. Region changes require review.
+       If your service/account lacks usable ranges, stop and resolve the
+       networking constraint. Do not blindly enable 0.0.0.0/0 or buy dedicated
+       IPs as an unapproved workaround. Reference R3 describes exceptions.
+
+  15.7 Use Atlas Connect -> Drivers -> Python to copy the real connection URI.
+       Use the APP database username/password, not your Atlas website login.
+       Password characters in a URI must be encoded correctly; do not paste
+       secrets into online encoders. Keep the vendor's TLS/SRV parameters.
+
+       Shape only, NOT a working URI:
+       mongodb+srv://<user>:<password>@YOUR-ACTUAL-CLUSTER-HOST/?retryWrites=true&w=majority
+
+       Replace ALL placeholders privately. Do not include the angle brackets
+       in a real value. Never enable tlsInsecure or invalid-certificate flags.
+
+  15.8 Set the actual URI as Render MONGO_URL and the actual stable database
+       name as DB_NAME. DB_NAME selects your app's collections; it is not the
+       cluster display name, Atlas username or a Supabase SQL connection.
+
+       Existing data: preserve its actual DB_NAME.
+       Brand-new approved empty project: choose and record a stable name,
+       e.g. da_roastbox_beta. Do not use this example to rename old data.
+
+  15.9 For a migration, keep the Render app blocked/not running against the
+       target until Section 17 is complete. App startup creates indexes and
+       runs recovery, so do not start it early on an empty restore target.
+       Leave DATA_IMPORT_CONFIRMED=false until the full decision/check passes.
+
+  15.10 Keep Mongo credentials out of Git, browser code, REACT_APP_* and logs.
+       Free Atlas is not a substitute for your independent verified backups.
+       Database success alone does not persist old customer photos/audio/reels.
+
+==========================================================================
+16. PRIVATE PERSISTENT MEDIA / VERCEL BLOB
+==========================================================================
+
+Render Free cannot preserve generated media in its local filesystem. An app
+that loads today but loses uploaded photos/audio/reels after restart is NOT
+a correctly deployed persistent app.
+
+The implemented Free blueprint expects:
+
+  STORAGE_BACKEND=vercel_blob
+  BLOB_READ_WRITE_TOKEN= [actual static token of the selected PRIVATE store]
+
+It uses the Python vercel-blob adapter OUTSIDE Vercel. You do not need a
+second Vercel website deployment, Vercel serverless rewrite, browser Blob
+credentials, VERCEL_OIDC_TOKEN or a Vercel account-management API token.
+
+ELIGIBILITY STOP CHECK:
+
+  - Vercel Hobby is personal/non-commercial only (reference V1).
+  - A business/branded app or intended revenue use may not qualify merely
+    because current purchases use Stripe TEST or access is called beta.
+  - Confirm permitted use, private Blob availability and actual allowances
+    for your account before creating/connecting a store.
+  - If ineligible under Free-only constraints, keep cloud beta closed. Do
+    not select a public store, enable an unapproved trial, upgrade silently
+    or assume S3/Supabase storage is a drop-in implemented adapter.
+  - An alternative storage backend needs an explicit compatible implementation
+    or approved arrangement. Local use remains the fallback, not fake cloud
+    persistence. No store/plan change was made by writing these instructions.
+
+IF YOUR SELECTED ACCOUNT/USE IS ELIGIBLE AND YOU APPROVE IT:
+
+  16.1 Sign into the correct existing Vercel team/project. Do not change an
+       unrelated application. A project can supply a storage connection;
+       you do not need to deploy this app's frontend on Vercel as well.
+
+  16.2 Open the selected project's Storage tab -> Create Storage -> Blob,
+       or open an already-approved compatible PRIVATE Blob store.
+
+  16.3 During creation select PRIVATE, not Public. Confirm account, region,
+       access and plan before saving. Retain the original store if migrating.
+
+  16.4 Select/add a read-write token environment variable for the connection,
+       or obtain the selected store's appropriate static read-write token
+       through its dashboard controls. This is for code running on Render,
+       not the default Vercel OIDC authentication flow. Reference V2 explains
+       the current dashboard and token option.
+
+  16.5 Copy the real BLOB_READ_WRITE_TOKEN into a private owner configuration
+       and Render's server-side Environment value. Do NOT place it in Git,
+       frontend .env, REACT_APP_*, public pages or support screenshots.
+       A Vercel account API token is not the correct Blob store credential.
+
+  16.6 Keep the app's ownership/share-scoped media routes. The backend reads
+       private objects and authorizes delivery. Do not hand out public customer
+       object URLs or make the store public to fix a playback error.
+
+  16.7 Preserve existing object namespaces/bytes during transfer (Section 17).
+       Source names include da-roastbox/audio/, da-roastbox/subjects/ and
+       da-roastbox/reels/. A working new store with no OLD objects is not a
+       successful media migration.
+
+  16.8 The release app checks its selected private storage at startup, including
+       a small write/read canary when needed. That uses storage operations;
+       it is not an AI/TTS/payment test. A presence-only token check does not
+       prove a successful private canary or ownership delivery.
+
+  16.9 Review storage capacity, read/write operations, private transfer and
+       monthly quotas. Reels can be tens of MB each and fill small free
+       allowances quickly. Do not delete customer originals or change access
+       mode when quotas run out; pause use and resolve the actual constraint.
+
+==========================================================================
+17. PRESERVE / MOVE EXISTING DATABASE AND MEDIA SAFELY
+==========================================================================
+
+THIS SECTION IS OPTIONAL ONLY WHEN AN ACTUAL OWNER-APPROVED MOVE IS NEEDED.
+It performs real private-data operations when --apply is used. It was not
+executed merely to write this guide. Do not run it against an old/richer app
+or destination you have not explicitly selected.
+
+If you are deliberately starting a new empty cloud project with no prior
+records/media to preserve, document that decision and skip transfer commands.
+If reusing the same authoritative remote DB/store, avoid unnecessary copying
+and plan only worker cutover and verification.
+
+17.A BACKUP / CONSISTENCY PREPARATION
+
+  1. Identify the actual authoritative DB_NAME, MONGO_URL, JWT_SECRET and all
+     media/cache roots or remote object stores. The source ZIP has none of
+     those customer records. Missing recovered history is not permission
+     to regenerate a show, re-buy a purchase or credit someone again.
+
+  2. Retain independent encrypted backups of private env/key material,
+     database and original media. Protect Windows backups with appropriate
+     owner ACLs/encryption; POSIX mode 600 is not a Windows ACL guarantee.
+
+  3. Pause APPLICATION WRITES under your control, including other deployed
+     app workers using that source database. Finish/account for in-flight
+     generation/reel/payment work. Stop only web app windows/workers as
+     appropriate. LEAVE MONGODB RUNNING. A consistent standalone export needs
+     writes actually paused, not copying live WiredTiger files or stopping DB.
+
+  4. Keep target application writes stopped through restore/reconciliation.
+     Keep Render DATA_IMPORT_CONFIRMED=false so startup does not race a copy.
+
+  5. For database export/restore, install the official MongoDB Database Tools
+     on your owner-controlled computer (reference M2). mongodump/mongorestore
+     are NOT bundled just because mongod.exe is bundled. Add their bin folder
+     to your selected terminal PATH through a trusted deliberate setup.
+     Do not put passwords/URIs directly into a public command line.
+
+  6. Run helper commands with the prepared project Python. Define $Py as in
+     Section 13. The commands below are PowerShell ONE-LINE examples. Replace
+     example source paths with YOUR actual authoritative locations.
+
+  Example variables (REPLACE THESE; do not guess your authoritative folder):
+
+    $SourceEnv = "C:\YourAuthoritativeApp\backend\.env"
+    $SourceMedia = "C:\YourAuthoritativeApp\backend\local_storage"
+    $SourceAudio = "C:\YourAuthoritativeApp\backend\audio_cache"
+    $TargetEnv = ".private\render.env"
+
+  $SourceMedia must be the actual media root containing da-roastbox/ when
+  using the local storage namespace. Remote-only sources require their own
+  owner-approved export/inventory; this helper does not fetch every old vendor.
+
+17.B READ-ONLY SOURCE INVENTORY
+
+  From the current helper project, with writes still paused:
+
+    & $Py scripts\data_inventory.py snapshot --env-file "$SourceEnv" --output .private\source-before.json --media-root "$SourceMedia" --audio-cache "$SourceAudio"
+
+  The helper reads canonical Mongo records and hashes local media; it does
+  not modify Mongo. It creates an exclusive PRIVATE manifest and refuses
+  overwriting it. Use a new filename for a later inventory, not --force.
+
+17.C REVIEW THE DATABASE TRANSFER PLAN FIRST
+
+  These commands, WITHOUT --apply, are plans and make no database writes:
+
+    & $Py scripts\mongo_transfer.py export --env-file "$SourceEnv" --archive .private\authoritative.archive.gz
+    & $Py scripts\mongo_transfer.py restore --env-file "$TargetEnv" --archive .private\authoritative.archive.gz
+
+  Do not infer that a printed plan means a backup or restore actually occurred.
+  The private target env needs the intended remote TLS MONGO_URL and DB_NAME
+  when you explicitly execute. Create/configure it per Section 18 if needed.
+
+17.D EXPLICIT OWNER EXPORT / EMPTY-TARGET RESTORE ONLY
+
+  ONLY after authorizing the destination and actually pausing writes:
+
+    & $Py scripts\mongo_transfer.py export --env-file "$SourceEnv" --archive .private\authoritative.archive.gz --apply --confirm-writes-paused
+
+  Export reads source and writes an exclusive private archive/log. Preserve
+  them; do not overwrite/reuse an old archive filename blindly.
+
+  ONLY for the selected remote TLS destination, verified genuinely empty:
+
+    & $Py scripts\mongo_transfer.py restore --env-file "$TargetEnv" --archive .private\authoritative.archive.gz --apply --confirm-empty-target
+
+  The helper checks actual target records and refuses nonempty destinations.
+  It does not add --drop, merge/delete or overwrite an existing database.
+  Keep DB_NAME unchanged. --source-db-name is only for an expressly reviewed
+  namespace rename, not a guessed repair for missing collections.
+
+  A failure can leave a partial archive or partly restored NEW target. Keep
+  the private logs/target for review. Do not delete a nonempty database or
+  bypass the refusal to make the next attempt appear successful.
+
+17.E PRIVATE MEDIA PLAN / COPY
+
+  Default LOCAL-FILES plan: no remote requests, writes a new local manifest:
+
+    & $Py scripts\import_private_media.py --source-media "$SourceMedia" --audio-cache "$SourceAudio" --manifest .private\media-plan.json
+
+  It preserves namespace/object bytes. Conflicting cache/durable bytes,
+  symlinks and unsafe paths stop instead of choosing a replacement silently.
+
+  ONLY after approving the actual authoritative local bytes and PRIVATE
+  target store, the real upload/read-back-verification command is:
+
+    & $Py scripts\import_private_media.py --source-media "$SourceMedia" --audio-cache "$SourceAudio" --manifest .private\media-applied.json --env-file "$TargetEnv" --apply --confirm-authoritative-source-and-private-target
+
+  This consumes storage upload/download operations. Existing objects must be
+  byte-identical; new writes forbid overwrite. Reviewed resumption can skip
+  identical objects but needs a NEW manifest filename. Nothing is deleted.
+
+  This is local-files -> private-Blob, not a universal remote vendor exporter.
+  Old vendor-specific absolute URLs/keys need an explicit mapping/compatibility
+  review. Do not regenerate original audio/photos/reels to hide missing bytes.
+
+17.F VERIFY BEFORE CUTOVER
+
+  With target writes still stopped:
+
+    & $Py scripts\data_inventory.py snapshot --env-file "$TargetEnv" --output .private\target-after.json
+    & $Py scripts\data_inventory.py compare .private\source-before.json .private\target-after.json
+
+  database_equal=true means canonical records match under that tool/version.
+  media_equal=null means remote media was NOT compared; it is not a media
+  success. Use verified transfer manifests, retained source hashes and actual
+  object coverage for that part. Review indexes and representative ORIGINAL
+  balances, entitlements, history, media and settlement markers without new
+  purchases, generation or credits.
+
+  Preserve the original JWT_SECRET EXACTLY. Do not rotate it because a new
+  host was created. If an old secret is too short for release guards, obtain
+  an explicit encryption/key-migration plan; do not break saved keys to make
+  a minimum-length check pass.
+
+  Only after authoritative database, original media, missing-history
+  reconciliation and backups are genuinely confirmed may the owner set:
+
+    DATA_IMPORT_CONFIRMED=true
+
+  For a genuinely approved fresh empty project, this means confirming that
+  no prior data/media is expected, not pretending a transfer happened.
+
+  Start only the intended new app/recovery worker. Do not let old and new
+  worker generations manage the same unfinished jobs simultaneously. Retain
+  original data/backups for rollback. See docs/DATA_PRESERVATION.md for the
+  complete safety contract.
+
+==========================================================================
+18. PREPARE PRIVATE RENDER CONFIGURATION AND BETA PASSWORD
+==========================================================================
+
+Work with your chosen clean source/helper folder. Do NOT upload a filled env
+file to GitHub. Copy from deploy/render.env.example, NOT by blindly pasting
+all local development .env settings into Render.
+
+  18.1 In PowerShell at the project root:
+
+       New-Item -ItemType Directory -Force ".private" | Out-Null
+       if (Test-Path ".private\render.env") { throw "Keep the existing private file; do not overwrite it." }
+       Copy-Item "deploy\render.env.example" ".private\render.env"
+       notepad ".private\render.env"
+
+       If a private file already exists, review/preserve it instead of
+       executing the copy command. .private is intentionally Git-ignored.
+
+  18.2 Privately transfer only the correct real values from your authorized
+       existing configuration: original JWT, actual DB target/name, approved
+       provider credentials, selected private-store token and TEST settings.
+       Do not request/repost keys in chat. Do not put local Windows file paths,
+       HTTP localhost CORS lists or the old Arena origin in cloud settings.
+
+  18.3 JWT_SECRET:
+       Existing data: preserve the original, never generate a replacement.
+       Only for a truly brand-new project with no encrypted old data: create
+       one strong persistent secret ONCE and keep it in your secret manager.
+       A fresh local launch already generates one. If you genuinely need a
+       new one for a new project, this local command prints one to YOUR private
+       terminal; copy it privately, not into Git or chat:
+
+       & $Py -c "import secrets; print(secrets.token_urlsafe(48))"
+
+  18.4 Additional beta password:
+       Reuse an existing approved verifier/signing-key pair if one exists.
+       If none exists and you intentionally create the new gate:
+
+       & $Py scripts\create_beta_gate.py --output .private\beta-gate.env
+
+       Enter/confirm a unique password of at least 12 characters when prompted.
+       It is not echoed or saved in plaintext. Save the password in your
+       password manager and distribute it only to selected beta testers.
+
+       The helper creates TWO settings:
+         BETA_ACCESS_PASSWORD_HASH
+         BETA_ACCESS_SIGNING_KEY
+
+       The signing key must be separate from JWT_SECRET. The helper refuses
+       to replace an existing output file; do not delete an old gate merely
+       to rerun it. It does not modify account passwords/JWT/balances.
+
+  18.5 Copy those two values into your private render.env. The dotenv file
+       can quote the scrypt verifier. When typing individual Render dashboard
+       VALUE boxes, paste the actual value WITHOUT surrounding quote marks.
+       Dollar signs are literal verifier characters, not shell substitutions.
+       Never put the plaintext beta password in an environment variable.
+
+  18.6 Keep DATA_IMPORT_CONFIRMED=false until Section 17's data decision and
+       verification really pass. Do not flip it just to force a green deploy.
+
+  18.7 Once Render assigns your actual hostname, use:
+
+       APP_ENV=beta
+       APP_BASE_URL=https://YOUR-ACTUAL-HOST.onrender.com
+       ALLOWED_HOSTS=YOUR-ACTUAL-HOST.onrender.com
+
+       APP_BASE_URL is the origin with https:// and no path/query/fragment.
+       ALLOWED_HOSTS is the hostname only: no https://, path, port or *.
+       CORS_ORIGINS should normally be unset/empty for same-origin deployment,
+       or only the explicitly trusted real HTTPS origins. Never retain local
+       HTTP origins from development in a release configuration.
+
+  18.8 Run the static/no-network preflight once the actual values are prepared:
+
+       & $Py scripts\render_preflight.py --env-file .private\render.env --check-runtime
+
+       It prints stable codes, not secret values. It does not start the API,
+       migrate data, call providers, perform Blob canaries or spend AI funds.
+       Before data/origin/webhook setup is complete it SHOULD report missing
+       requirements. Fix the cause in the private settings; do not disable
+       a release guard. A pass is static/package metadata, not connectivity.
+
+       If the actual origin is known but not saved in the private file yet:
+
+       & $Py scripts\render_preflight.py --env-file .private\render.env --origin https://YOUR-ACTUAL-HOST.onrender.com --check-runtime
+
+       This only overrides APP_BASE_URL for that in-memory check. It does not
+       update Render, the env file, ALLOWED_HOSTS or an auth provider for you.
+
+  18.9 Use the checklist in Section 19 when populating Render. Keep the private
+       file/secret manager as a secure record of settings. Do not publish it
+       as a downloadable example, attach it to an issue or dump it into logs.
+
+==========================================================================
+19. FULL RENDER ENVIRONMENT-VARIABLE CHECKLIST
+==========================================================================
+
+Set these in Render -> your intended service -> Environment. In a Blueprint,
+render.yaml supplies many non-secret defaults and asks for sync:false values.
+In manual Docker creation YOU must add all required non-secret defaults too.
+
+IMPORTANT: in the dashboard key/value editor, enter plain VALUE characters,
+not KEY=value as the value, and not surrounding dotenv quotes. A bulk .env
+import must remain private and be reviewed before saving. Never paste a whole
+local .env without checking development-only values and provider secrets.
+
+19.A REQUIRED PRIVATE / DEPLOYMENT-DEPENDENT VALUES
+
+  APP_ENV
+    beta
+    Enables the external beta guard/security requirements. Do not use
+    development to bypass missing cloud protections.
+
+  APP_BASE_URL
+    Your actual https:// assigned origin, later the canonical custom domain
+    if selected. No localhost, old Arena URL, /api or callback path.
+    Default Render domain can derive from RENDER_EXTERNAL_URL, but explicitly
+    recording the canonical origin is recommended.
+
+  ALLOWED_HOSTS
+    Actual hostname(s), comma-separated if intentionally needed, without
+    scheme/path/port. Do not use a blanket *.
+
+  MONGO_URL
+    Actual approved remote TLS URI, secret, with a working database user and
+    network allowlist. Never a local 127.0.0.1 Mongo or a Supabase SQL URL.
+
+  DB_NAME
+    Actual authoritative database name, or your deliberately selected empty
+    new project's stable name. Never guess it from the cluster display name.
+
+  JWT_SECRET
+    Original persistent secret if existing data; release requires >=32 chars.
+    Do not casually rotate to fix a deployment. Keep it secret and backed up.
+
+  DATA_IMPORT_CONFIRMED
+    true ONLY after the data/media decision and reconciliation described
+    above are actually complete. Until then leave false and expect refusal.
+
+  STORAGE_BACKEND
+    vercel_blob for this Free blueprint.
+
+  BLOB_READ_WRITE_TOKEN
+    Actual selected PRIVATE store's static read-write token, server only.
+    Confirm account/use eligibility. A Vercel management token is not this.
+
+  BETA_ACCESS_PASSWORD_HASH
+    Existing or deliberately generated supported scrypt verifier. Not the
+    plaintext password and not a fabricated placeholder.
+
+  BETA_ACCESS_SIGNING_KEY
+    Separate persistent key >=32 chars, not JWT_SECRET.
+
+  OPENROUTER_API_KEY
+    Your existing genuine writer key with approved model access and budget.
+
+  OPENAI_API_KEY
+    Your existing genuine speech/direct-backup key with appropriate access.
+
+  STRIPE_API_KEY
+    Existing genuine TEST server key; do not paste a live/publishable key.
+
+  STRIPE_WEBHOOK_SECRET
+    Signing secret for THIS public URL's TEST SNAPSHOT webhook destination.
+    Local Stripe CLI and old deployment signing secrets are not substitutes.
+
+19.B REQUIRED NON-SECRET WRITER / RUNTIME / SAFETY DEFAULTS
+
+  AI_DEFAULT_PROVIDER=openai
+  ROAST_WRITER_PROVIDER=openrouter
+  ROAST_WRITER_PROFILE=multimodal
+  ROAST_OPENROUTER_MODELS=anthropic/claude-sonnet-4.5,openai/gpt-4.1,openai/gpt-4o
+  ROAST_BACKUP_PROVIDERS=emergent,openai
+  ROAST_FREE_WRITER_ONLY=false
+  ROAST_ALLOW_PAID_WRITER_FALLBACK=true
+  ROAST_SPEED_PROFILE=quality
+  ROAST_TTS_CONCURRENCY=4
+  REEL_ENCODER_PRESET=ultrafast
+  STRIPE_TEST_ONLY=true
+  ENABLE_PAID_DIAGNOSTICS=false
+  ALLOW_DEV_LOGIN=false
+  ALLOW_SOURCE_DOWNLOAD=false
+
+Do not replace the approved model chain with legacy free-profile values.
+Keep advanced timing/token parameters at the supported/tuned defaults rather
+than guessing. AI usage remains billable despite Free compute or preview.
+
+19.C KEEP THE EXPLICIT BETA EXPLORE GROUP TOGETHER
+
+  ENABLE_PREVIEW_LOGIN=true
+  ALLOW_PREVIEW_HOSTED_AI=true
+  PREVIEW_UNLIMITED_CREDITS=true
+  PREVIEW_HOSTED_DAILY_SHOW_LIMIT=-1
+  PREVIEW_HOSTED_DAILY_VOICE_LIMIT=-1
+
+These are the supplied password-protected PRIVATE BETA settings, not an open
+production configuration. They remove app preview daily/credit blocking,
+not provider quotas, real-user entitlement rules or hosting/resource limits.
+Do not expose this mode openly or reset users to make preview appear funded.
+
+19.D OPTIONAL GENUINE SERVICES
+
+  EMERGENT_LLM_KEY
+    Preserve only if you actually use the existing configured gateway backup.
+
+  ELEVENLABS_API_KEY
+    Optional hosted premium voices; entitlement and user-BYOK behavior still
+    applies. A key's presence is not delivery verification.
+
+  TTS_MODEL=gpt-4o-mini-tts
+    Supported OpenAI speech setting. Existing actual fallback reporting stays.
+
+  EMAIL_AUTH_ENABLED=false
+  EMAIL_TRANSPORT=resend
+    Keep optional mail off until genuine delivery is configured. To enable,
+    use EMAIL_AUTH_ENABLED=true with actual RESEND_API_KEY and EMAIL_FROM.
+    Do not use blocked SMTP ports for Render Free.
+
+  RESEND_API_KEY
+  EMAIL_FROM
+    Actual selected mail credential/verified sender when enabling email.
+
+  VOICE_LEVELING_ENABLED=true
+  VOICE_TARGET_RMS_DBFS=-19
+    Local mastering defaults; not a request for paid voice synthesis.
+
+  CORS_ORIGINS
+    Normally unset/empty for same-origin. Only exact trusted HTTPS origins if
+    needed. No credentialed * or copied localhost HTTP list in beta.
+
+19.E PUBLIC FRONTEND BUILD SETTINGS - NOT SECRETS
+
+  REACT_APP_BACKEND_URL=
+    LEAVE THE VALUE EMPTY. Browser calls same-origin /api.
+
+  REACT_APP_ENABLE_PREVIEW_LOGIN=true
+  REACT_APP_SOURCE_DOWNLOAD_ENABLED=false
+  REACT_APP_ENABLE_SESSION_TUNNEL=false
+
+Optional, only genuine public destinations:
+
+  REACT_APP_SUPPORT_EMAIL
+  REACT_APP_INSTAGRAM_URL
+  REACT_APP_FACEBOOK_URL
+  REACT_APP_TIKTOK_URL
+  REACT_APP_YOUTUBE_URL
+
+Leave absent/empty rather than inserting fake social profiles. Public values
+are baked into the frontend and need a REBUILD after changes. Render exposes
+env values as Docker build args; the supplied Dockerfile declares only public
+frontend ARGs. Do not add secret ARGs or put keys/URIs into REACT_APP_*.
+
+19.F PLATFORM / DOCKER MANAGED - DO NOT NORMALLY ENTER MANUALLY
+
+  PORT                       Set by Render; CMD reads it.
+  RENDER                     Set by Render, not your local development value.
+  RENDER_EXTERNAL_URL        Assigned Render URL.
+  FRONTEND_BUILD_DIR         Docker: /app/frontend/build.
+  TMPDIR                     Docker: /app/backend/media_tmp, disposable.
+  OPENBLAS_NUM_THREADS        Docker: 1.
+  OMP_NUM_THREADS             Docker: 1.
+  MKL_NUM_THREADS             Docker: 1.
+  GENERATE_SOURCEMAP          Docker frontend build: false.
+
+Do not set HOST/PORT to the old Arena preview, set LOCAL_STORAGE_DIR as a fake
+Free persistent disk, add a Vercel OIDC token, or replace Mongo with DATABASE_URL.
+A separate Vercel website, Supabase SQL keys, Google client env variables,
+Redis, paid Render worker/disk or Ngrok token is not a prerequisite for this
+implemented private-beta architecture.
+
+==========================================================================
+20. CREATE THE RENDER SERVICE - BLUEPRINT OR MANUAL DOCKER
+==========================================================================
+
+Choose ONE route, not both. Use the intended existing Render workspace and
+review every resource/plan before approving. This guide does not deploy it
+for you. Do not modify an old unrelated production/beta app by accident.
+
+20.A BLUEPRINT ROUTE
+
+  1. Sign into https://dashboard.render.com/.
+  2. Select the intended workspace.
+  3. Choose New -> Blueprint (label may vary slightly).
+  4. Authorize access to the intended GitHub repository. Prefer least-needed
+     repo access, not all unrelated private repositories.
+  5. Select the correct repo and branch (normally main).
+  6. Render should find ROOT render.yaml. If it cannot, inspect repository
+     structure; do not choose an arbitrary nested root to hide the problem.
+  7. Review the proposed resources. Expected:
+
+       ONE web service
+       runtime: docker
+       plan: free
+       numInstances: 1
+       no database, no disk, no worker, no paid trial
+       healthCheckPath: /api/ready
+       manual/off autodeploy
+
+  8. Enter sync:false values privately using Sections 18-19. Also review
+     actual non-secret Blueprint defaults. Do not leave fake placeholders.
+  9. Use an available service name. Render assigns the actual public hostname;
+     do not assume the suggested name is available or guess its final URL.
+ 10. Apply/create only after the resource/cost review. Watch Events/Logs.
+ 11. Complete actual hostname, outbound Mongo ranges, gate/data/storage and
+     webhook configuration. If an initial startup is refused while values are
+     incomplete, leave the guard intact, finish settings and redeploy manually.
+
+20.B MANUAL WEB SERVICE ROUTE
+
+  1. New -> Web Service, NOT Static Site or Background Worker.
+  2. Connect the correct GitHub repo/branch and select these values:
+
+       Name:                 Your chosen available beta service name.
+       Region:               Deliberately chosen near approved DB/store.
+       Language / Runtime:   Docker.
+       Root Directory:       EMPTY (repository root).
+       Dockerfile Path:      ./Dockerfile
+       Docker Build Context: .
+       Instance type:        FREE.
+       Instances:            1.
+       Health Check Path:    /api/ready
+       Auto deploy:          OFF / manual.
+       Persistent disk:      NONE.
+       Build command:        Leave Docker defaults; no Node-only override.
+       Start/Docker command: Leave Docker CMD/ENTRYPOINT defaults.
+
+  3. Add private and public env values from Section 19. Manual creation does
+     NOT automatically import render.yaml's env defaults. In particular add
+     the backend preview group and matching REACT_APP_ENABLE_PREVIEW_LOGIN
+     value deliberately; Docker's isolated frontend default can be false.
+  4. Confirm Free and that no paid resources/trials are selected.
+  5. Create/deploy and observe build/start logs privately.
+
+20.C WHAT BOTH ROUTES BUILD/RUN
+
+  Docker builds the frontend in a Node 22.23.4 Linux stage with:
+
+    yarn install --frozen-lockfile --ignore-engines --non-interactive
+    yarn build
+
+  It installs pinned backend runtime requirements in a Python 3.13 Linux
+  image, includes FFmpeg via the package dependency, copies the built site,
+  and drops to non-root roastbox uid 10001 through deploy/entrypoint.sh.
+
+  Startup working directory: /app/backend
+  Docker CMD, ALREADY PROVIDED; do not enter literally as a Windows command:
+
+    exec python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1
+
+  FastAPI serves BOTH /api and /app/frontend/build. No separate production
+  Node web process, Windows interpreter or MongoDB container is required.
+  Do not change to localhost binding, fixed local port 8001, multiple workers
+  or a different untested encoder just to bypass a Free-tier failure.
+
+20.D INITIAL CONFIGURATION ORDER / APPARENT CHICKEN-AND-EGG
+
+  You may need a created service to learn its actual hostname/outbound ranges
+  before final Atlas allowlisting, Stripe destination and env values are ready.
+  Creating it can trigger a first build/start. A controlled failed startup
+  while the release guards remain ON is safer than disabling them.
+
+  Complete the real settings, perform owner-approved data/media work with
+  target writes stopped, set confirmation only after verification, then deploy
+  manually. Do not use ALLOWED_HOSTS=*, local media or APP_ENV=development to
+  make the first dashboard indicator green.
+
+==========================================================================
+21. COMPLETE REAL URL, AUTH, EMAIL, WEBHOOK AND OPTIONAL DOMAIN
+==========================================================================
+
+  21.1 Copy the ACTUAL Render HTTPS URL from your service dashboard.
+       Store the canonical value in APP_BASE_URL and hostname in ALLOWED_HOSTS.
+       Confirm Mongo's access list includes the actual service outbound ranges.
+
+  21.2 If using managed Google, have the real new origin and
+       /auth-complete.html accepted by that provider. Preserve callback/state
+       checks. Do not enter an old Arena URL or invent client credentials.
+       See Section 08 for the actual integration/portability limitation.
+
+  21.3 If enabling first-party email, configure real HTTPS delivery, verified
+       sender and APP_BASE_URL. Email links must lead to THIS site, including
+       its /auth/verify or /auth/reset pages, not a localhost or old domain.
+       Do not put single-use tokens in screenshots or support logs.
+
+  21.4 Configure THIS origin's Stripe TEST SNAPSHOT webhook per Section 09.
+       Update its actual endpoint signing secret in Render. Keep TEST-only
+       protection. A local CLI or old endpoint secret is not the new one.
+
+  21.5 Review frontend public settings and rebuild/deploy if any changed.
+       REACT_APP_BACKEND_URL remains EMPTY. Do not enter a second API domain,
+       localhost, Arena URL, private token or port 8001.
+
+  21.6 Set DATA_IMPORT_CONFIRMED=true only after the real data/media decision,
+       transfer if applicable, reconciliations and retained backups pass.
+
+  21.7 Rerun static preflight on your correctly selected private configuration.
+       Copy final values into Render; a local file edit alone does not change
+       the cloud environment. Choose the appropriate manual deploy/rebuild
+       action. Frontend public-setting changes require a new build, not just
+       restarting an old container.
+
+OPTIONAL CUSTOM DOMAIN - NOT REQUIRED TO GET A WORKING URL:
+
+  1. Start with the free assigned .onrender.com URL. Do not buy/register a new
+     domain merely to follow this guide. If you already own an approved one,
+     Render supports custom domains and managed TLS subject to current rules.
+  2. Add the chosen domain in the intended Render service's Settings.
+  3. Follow the exact DNS records Render supplies. Apex, www, CNAME/ALIAS/A
+     requirements depend on the DNS provider. Do not guess IP addresses or
+     remove unrelated email DNS records. Reference R5.
+  4. Wait for domain verification and a valid TLS certificate before using it.
+  5. Select one canonical HTTPS origin and update APP_BASE_URL accordingly.
+     List the intentionally accepted hostnames in ALLOWED_HOSTS, no wildcard *.
+  6. Update/confirm managed Google origin/callback acceptance, email link base
+     and the appropriate Stripe TEST webhook endpoint/signing secret.
+  7. Manually deploy/rebuild if required and verify in a standalone browser.
+     Browser sessions can be origin-specific; logging in again is normal.
+  8. Retain old endpoint/data responsibility during a deliberate transition;
+     do not leave duplicate old/new workers racing over unfinished jobs.
+
+==========================================================================
+22. FIRST DEPLOYMENT CHECKS WITHOUT PAID GENERATION / CHECKOUT
+==========================================================================
+
+A Live/green service indicator is not proof that every provider works or data
+was preserved. Use the following staged checks. No new generation/voice sample/
+checkout is required to complete the read-only deployment checklist.
+
+22.A HEALTH / BOOT
+
+  1. In Render Events/Logs, confirm the expected successful build/start and
+     one web instance. Release configuration/storage refusal is not a warning
+     to ignore. Check for actual readiness, not an endlessly restarting app.
+
+  2. Open in a full external browser tab:
+
+       https://YOUR-ACTUAL-HOST/api/health
+       https://YOUR-ACTUAL-HOST/api/ready
+
+     Or read-only PowerShell:
+
+       Invoke-RestMethod "https://YOUR-ACTUAL-HOST/api/health"
+       Invoke-RestMethod "https://YOUR-ACTUAL-HOST/api/ready"
+
+     health reports process/version; ready pings Mongo. Neither performs
+     paid writer/TTS/Stripe probes. They are intentionally exempt from the
+     extra beta form for Render's readiness checks. They do not prove Blob
+     ownership, OAuth acceptance, AI credit or end-to-end payment fulfillment.
+
+  3. Open the base HTTPS origin. Enter the additional beta password, then
+     inspect the intro, sound gesture fallback and explicit 21+ consent.
+     The beta password must not replace normal account login/data isolation.
+
+22.B ORIGINAL DATA / ACCESS
+
+  4. Sign in only with an owner-approved account. Reauthentication after an
+     origin change is normal. Confirm original credits, entitlements, history
+     and existing purchases against the authoritative source/receipts.
+  5. Open EXISTING show transcripts, photos, saved audio, share/reel records.
+     Do not regenerate missing content or create another purchase as a check.
+  6. Verify another authorized beta account cannot access the first account's
+     private records/media. Do not make private storage public to fix a 404.
+  7. Inspect an existing completed reel and download it in a full browser.
+     Creating a NEW reel or first uncached audio sample can use quota/providers;
+     decide and budget that separately. Mobile emulation is not phone proof.
+  8. Confirm source download, development login and public Swagger/OpenAPI are
+     not exposed in beta. Ordinary account 401/403 responses are not a reason
+     to disable access checks or revive an Arena iframe session tunnel.
+
+22.C PROVIDER VERIFICATION IS SEPARATE
+
+  9. Settings capability flags mean CONFIGURED, not necessarily VERIFIED.
+     Review each service deliberately: actual Google origin login, real mail
+     sender/inbox delivery, requested/actual writer and voice reporting,
+     private storage permissions, and Stripe TEST endpoint deliveries.
+ 10. Keep ENABLE_PAID_DIAGNOSTICS=false. Do not run historical real-QA scripts,
+     repeat a consumed generation/checkout, manually top up accounts or select
+     a paid model/voice test just because a diagnostic button exists.
+ 11. Only after explicit new owner approval and provider budgets should an
+     end-to-end generation or genuine TEST purchase be made. Inspect existing
+     request/session/ledger state before retries to avoid duplicate work.
+
+OPTIONAL DEVELOPER CHECKS:
+
+  The source includes launcher/storage/prepared-bundle offline fixture tests
+  and a guarded backend test runner. These are not mandatory deployment steps
+  and may need additional development-only packages. Do not install dev tools
+  into the sealed bundled runtime by hand, run an old UI helper against live
+  original accounts, or mistake mocks for actual cloud/provider acceptance.
+  Read docs/LOCAL_INSTALL.md and docs/RELEASE_READINESS.md before using them.
+
+==========================================================================
+23. UPDATING, BACKING UP, ROLLBACK AND FREE-TIER OPERATIONS
+==========================================================================
+
+NORMAL SOURCE UPDATE:
+
+  1. Back up private configuration, authoritative DB and original media first.
+  2. Review the change against your current app/customizations. Never replace
+     rich native source blindly with a recovered older snapshot.
+  3. Account for active generation/reel/payment work and choose a controlled
+     application-write pause where needed. Do not stop/delete MongoDB.
+  4. Commit/push only reviewed source. Inspect staged names for private data.
+  5. Verify Render is connected to the intended branch and autodeploy remains
+     manual/off. Choose Deploy latest commit only when YOU intend it.
+  6. Runtime secret edits need an appropriate redeploy/restart; public frontend
+     env changes need a rebuild. Do not run pip/Yarn in a Free dashboard shell:
+     normal shell/SSH is not available and ephemeral edits are not deployment.
+  7. Keep one instance/worker and the tested ultrafast encoder/thread settings.
+  8. Verify health/readiness, gate and original data after the deployment.
+
+BACKUPS:
+
+  - Retain independent encrypted backups of Mongo records, private original
+    media/object inventories, JWT and important provider/gate configuration.
+  - Source Git history and Render image history are NOT customer backups.
+  - Remote Blob objects are not a backup of Mongo references/credits, and a
+    Mongo dump is not a backup of original Blob media.
+  - Free provider tiers do not automatically supply a full backup/restore
+    service. Review retention and perform an approved restore rehearsal on
+    a separate empty target before trusting the plan.
+  - Never commit private manifests, customer photos/transcripts, database
+    exports, env files or API credentials while documenting a backup.
+
+ROLLBACK:
+
+  - If a new deployment fails, preserve logs/data and stop/revert only the
+    new APPLICATION under your control. Retain old source and stores.
+  - Do not restore an old dump over a database that has accepted new writes.
+    Reconcile differences and ownership/settlement records deliberately.
+  - Render's deploy rollback is a CODE/IMAGE action, not a database rollback.
+  - Do not let old/new recovery workers manage the same unfinished jobs at
+    the same time. The supplied request-level recovery is not a distributed
+    durable queue/multi-worker architecture.
+
+FREE-TIER SLEEP / INTERRUPTIONS:
+
+  - A first request after idle can display Render's wake-up page. Let that
+    deliberate request finish; do not repeatedly launch generation/checkouts.
+  - Sleeping/restarted processes cannot guarantee background work or webhook
+    delivery timing. Recovery/reconciliation runs while the process is awake.
+  - If a response is lost, check original recent-show/reel/payment state before
+    resubmitting. Provider usage can be billed even when the client disconnects.
+  - Large reels/private downloads can exhaust small quotas quickly. Watch
+    actual workspace/provider usage, not just whether the UI loads.
+  - Do not use artificial keepalive traffic to defeat Free sleep, erase old
+    customer objects to hide quota problems, or automatically upgrade plans.
+    Pause the beta when a Free-only constraint cannot be satisfied safely.
+
+BEFORE PUBLIC PRODUCTION / LIVE SALES / APP STORES:
+
+  The Free beta is not certification of production or store readiness. Still
+  review durable jobs, webhooks/outage recovery, backups/restore, monitoring,
+  alerts, abuse reporting, privacy/retention/deletion, actual-origin auth/mail,
+  provider/commercial-content eligibility, billing/tax/processor obligations,
+  mobile/native platform rules, licenses/source distribution and physical
+  device tests. A 21+ checkbox does not grant payment/store policy approval.
+
+  Keep the required Clean/off-limits/consent/entitlement controls. No provider
+  can be promised to generate universally uncensored output, and no template
+  can guarantee store approval or that every advanced feature works on a
+  sleeping Free host under simultaneous load.
+
+==========================================================================
+24. RENDER TROUBLESHOOTING / EXACT ERROR MEANINGS
+==========================================================================
+
+"Dockerfile / render.yaml not found"
+  Check the GitHub root and selected branch. Extract the ZIP before upload.
+  Root Directory should be empty for the supplied flat layout. A ZIP-only
+  repo or an accidental extra parent folder is not the required structure.
+
+"Wrong runtime / trying to launch only Node or only a static site"
+  Choose a Web Service with Docker. Leave Dockerfile build/start defaults.
+  The supplied image builds React and starts FastAPI serving the same site.
+
+"Build cannot resolve npm/PyPI package or image"
+  Check actual build log, frozen lockfile, network/registry availability and
+  supported pinned files. Reattempt a reviewed build if transient. Do not
+  replace every dependency with latest, discard the lockfile, install Windows
+  packages into Linux, or expose keys as build args to suppress an error.
+
+"No listening port / deploy times out"
+  Use the provided CMD with 0.0.0.0 and Render's PORT. Do not bind only
+  127.0.0.1, force local port 3000/8001, run start.bat on Render, or launch
+  MongoDB as the web service. Fix startup guard failures first.
+
+"HTTPS_APP_BASE_URL_REQUIRED / EXPLICIT_ALLOWED_HOSTS_REQUIRED"
+  Set the actual HTTPS origin and exact hostname. APP_BASE_URL includes
+  https://; ALLOWED_HOSTS does not. Do not insert a wildcard or development
+  mode to bypass this.
+
+"PERSISTENT_JWT_SECRET_MIN_32_REQUIRED_DO_NOT_ROTATE_EXISTING_KEY"
+  Preserve the correct existing secret. If a short historical key truly
+  requires migration, stop for an explicit reviewed encryption migration;
+  do not generate a different key and orphan saved BYOK data.
+
+"DATA_IMPORT_AND_HISTORY_RECONCILIATION_REQUIRED"
+  DATA_IMPORT_CONFIRMED is not true. Complete the authoritative data/media
+  decision/verification. This is a deliberate guard, not permission to
+  pretend data was migrated or reset a target database.
+
+"RELEASE_REQUIRES_REMOTE_TLS_MONGODB / Mongo timeout / ready is 503"
+  Use the actual approved remote TLS URI, exact DB user/password and DB_NAME.
+  Check password URI encoding, Atlas IP access list for Render's ACTUAL
+  outbound ranges, DNS/SRV, cluster availability and TLS trust. Never set
+  tlsInsecure/invalid-cert flags or use localhost/SQL as a release workaround.
+
+"PRIVATE_BLOB_TOKEN_REQUIRED / durable media unavailable"
+  Confirm correct STATIC token, correct PRIVATE store, eligibility, access
+  mode and quota. A Vercel management/OIDC token or public store is not the
+  configured outside-Vercel adapter. Startup canary failure is not fixed by
+  turning off storage checks or storing customer bytes only in /app/cache.
+
+"BETA_REQUIRES_ADDITIONAL_PASSWORD_GATE / verifier invalid"
+  Use the actual supported scrypt verifier and separate signing key. Do not
+  paste the plaintext password or include surrounding dotenv quotes in an
+  individual dashboard value box. Preserve all dollar signs exactly. Use
+  the owner helper only if creating a genuinely new gate, not to overwrite
+  an existing one casually.
+
+"CORS_REQUIRES_EXPLICIT_HTTPS_ORIGINS"
+  You probably copied local HTTP origins into cloud settings. Use same-origin
+  deployment with CORS_ORIGINS empty/unset, or exact trusted HTTPS origins.
+  Never use credentialed *.
+
+"Explore button missing or source/old login tunnel visible"
+  Check both backend and PUBLIC build settings. Add manual-service defaults
+  from Section 19; set REACT_APP_ENABLE_PREVIEW_LOGIN=true, source download
+  false and session tunnel false for Render, then REBUILD. Runtime-only edits
+  cannot change already-compiled JavaScript.
+
+"Old Arena URL / browser calls localhost / blank page"
+  Keep REACT_APP_BACKEND_URL empty and ensure Docker rebuilt the current
+  frontend. Confirm the actual deployed branch/commit and /app/frontend/build.
+  Do not give external users the API port or put server secrets into JS.
+
+"Invalid host header / HTTP 400"
+  Review ALLOWED_HOSTS against the real assigned/custom hostname. Use only
+  the intended canonical URL. Do not delete host validation or use *.
+
+"401 / 403 on private API or media"
+  Usually missing/expired account auth, ownership or entitlement, separate
+  from the beta gate. Reauthenticate at the correct origin; verify original
+  account linking. Do not make media public or bypass ownership checks.
+
+"404 on old media while new pages load"
+  A new empty store is not a migration. Check retained original namespaces,
+  exact DB references and actual original bytes, including legacy cache.
+  Approve a real mapping/export for older vendor URLs; do not regenerate or
+  substitute files to hide lost history.
+
+"Email enabled but registration/reset unavailable / no messages arrive"
+  Verify EMAIL_TRANSPORT=resend, real RESEND_API_KEY, verified EMAIL_FROM,
+  correct APP_BASE_URL and provider sender/recipient restrictions. SMTP ports
+  are blocked on Free. No key/present flag guarantees deliverability.
+
+"Google works in old preview but not new domain"
+  Managed provider new-origin/callback acceptance remains a real dependency.
+  Confirm /auth-complete.html/state flow and the chosen exact HTTPS origin.
+  This version has no independent Google-client env switch. Do not remove
+  state checks, create duplicate account credits or claim Supabase fixed it.
+
+"Stripe webhook signature/TEST validation fails"
+  Use THIS TEST SNAPSHOT endpoint's signing secret, not the CLI/old/live one.
+  Confirm /api/payments/webhook, raw signed POST delivery and the four handled
+  Checkout event types. Thin events are not the current parser's recipe.
+  Recheck tracked Checkout owner/amount/currency/TEST status. Never manually
+  grant credits from a redirect or create another purchase just to retry.
+
+"Build disabled, service suspended or quota exhausted"
+  Review actual Free hours, bandwidth/build minutes, provider quotas and
+  service-initiated traffic. Do not accept a paid tier/trial automatically,
+  spoof usage with keepalives or discard customer data. Keep beta closed
+  while the real Free-only limitation is resolved.
+
+"Out of memory / interrupted reel / repeated restarts"
+  Free compute has limited resources. Keep one worker/instance, native thread
+  limits and ultrafast encoder. Local synthetic checks are not proof of your
+  actual Render concurrency/cgroup capacity. Do not add workers, duplicate
+  jobs or resubmit billed generation blindly. Inspect existing status and
+  logs, pause heavy operations, and reassess the hosting constraint honestly.
+
+"I cannot SSH or open a shell on Free"
+  Expected Free limitation. Use reviewed source/env changes and manual
+  redeployment; perform owner-approved inventory/transfer tools from your
+  own machine. Do not depend on ephemeral shell edits as a deployment plan.
+
+==========================================================================
+25. FINAL CHECKLISTS AND IMPORTANT FILES
+==========================================================================
+
+LOCAL READY CHECKLIST:
+
+  [ ] Complete trusted ZIP extracted into a new writable folder.
+  [ ] Existing authoritative config/data/media protected; no blind overwrite.
+  [ ] thelaunch.bat checked/unpacked compatible dependencies.
+  [ ] Website opens on 3000, API on 8001, Mongo on 27017 - no confusion.
+  [ ] health / ready / frontend API proxy return successful JSON.
+  [ ] Correct 21+ consent and intro gesture audio controls.
+  [ ] Correct DB_NAME, persistent JWT and actual media location.
+  [ ] Genuine private AI/voice/auth/TEST/mail configuration where needed.
+  [ ] Provider budgets set; no unintended generation/checkout probes.
+  [ ] Launcher window kept open while using; stop only its web children.
+  [ ] Independent backups and no database/router exposure.
+
+RENDER PRIVATE BETA READY CHECKLIST:
+
+  [ ] Clean current source in the intended owner-selected PRIVATE repository.
+  [ ] No .env, runtime, .private, .data or customer media committed/uploaded.
+  [ ] ONE Docker Web Service, explicit FREE compute, one instance/worker.
+  [ ] No paid disk/worker/database/trial silently selected; AUTO deploy off.
+  [ ] Actual approved remote TLS MongoDB + working IP access rules.
+  [ ] Actual PRIVATE persistent media, correct token and confirmed eligibility.
+  [ ] Existing JWT preserved and original DB/media/history reconciled.
+  [ ] DATA_IMPORT_CONFIRMED means real confirmation, not a bypass.
+  [ ] Correct beta verifier/separate signing key; no plaintext password.
+  [ ] Actual HTTPS APP_BASE_URL and exact ALLOWED_HOSTS.
+  [ ] REACT_APP_BACKEND_URL empty; correct beta public flags built into JS.
+  [ ] Approved OpenRouter model chain and genuine speech, budgets controlled.
+  [ ] Managed Google NEW origin confirmed, not assumed; mail genuine if enabled.
+  [ ] Stripe TEST-only key and THIS endpoint's SNAPSHOT signing secret/events.
+  [ ] Paid deep diagnostics off; no automatic AI/payment test/recredit.
+  [ ] health and ready pass; existing accounts/media access checked safely.
+  [ ] Backups, quota monitoring, downtime/cutover/rollback plan understood.
+  [ ] No claim of production/live-sales/store/physical-device certification.
+
+IMPORTANT FILES TO KEEP / READ:
+
+  thelaunch.bat / start.bat / LAUNCH_DA_ROASTBOX.bat
+    Windows setup/start/default browser entries.
+  start.py / Launcher.py / install.py
+    Shared Python setup/start logic; BAT bootstraps when Python is missing.
+  scripts/local_start.py
+    Local API/Node/Mongo readiness and own-web-process shutdown.
+  scripts/bootstrap_python.ps1
+    Verified Windows interpreter selection/bootstrap.
+  backend/.env.example and frontend/.env.example
+    Templates only. Existing private .env files stay private.
+  runtime/windows-x64/bundle.json
+    Prepared runtime/build integrity manifest in the Windows package.
+  deploy/windows-prepared.json
+    Public pinned vendor/wheel provenance and checksums.
+  Dockerfile / .dockerignore / render.yaml
+    Linux cloud build, safe context and Free Blueprint.
+  deploy/render.env.example
+    Blank-secret cloud template; filled copy must be private.
+  scripts/create_beta_gate.py
+    Explicit owner-only beta gate provisioning, no JWT rotation.
+  scripts/render_preflight.py
+    No-network static configuration/package check, not live connectivity.
+  scripts/data_inventory.py / scripts/mongo_transfer.py
+    Read-only fingerprints and gated owner backup/empty-target restore.
+  scripts/import_private_media.py
+    Gated local-originals -> private Blob copy with byte checks.
+  docs/LOCAL_INSTALL.md / docs/WINDOWS_BUNDLE.md
+    Launcher/runtime details and verified/not-verified scope.
+  docs/RENDER_DEPLOYMENT.md / docs/ENVIRONMENT.md
+    More cloud/configuration reference.
+  docs/DATA_PRESERVATION.md / docs/OPERATIONS_RUNBOOK.md
+    Authoritative records, media, encrypted keys, recovery and rollback.
+  docs/API.md / docs/INTEGRATIONS.md / docs/RELEASE_READINESS.md
+    Routes, integration behavior and remaining acceptance gates.
+  docs/WINDOWS_THIRD_PARTY.md and included license files
+    Third-party licenses/source pointers; review redistribution obligations.
+
+Do not run old real-payment/AI QA scripts, non-idempotent repair scripts or
+historical patch helpers as installation steps. They are not necessary to
+launch this current download and can change/spend/recharge things improperly.
+
+==========================================================================
+26. OFFICIAL REFERENCE LINKS AND VERIFICATION BOUNDARIES
+==========================================================================
+
+Dashboard labels, limits, plans and provider policies can change. Use the
+actual official screens for your selected account and verify current terms.
+These references support the external-service details in this guide; app-
+specific commands/routes were checked against the supplied project source.
+
+  R1  Render Free: sleep, ephemeral files, quotas, SMTP and feature limits
+      https://render.com/docs/free
+  R2  Render Docker: Dockerfile selection, CMD and env-to-build-arg behavior
+      https://render.com/docs/docker
+  R3  Render service outbound ranges for database IP access lists
+      https://render.com/docs/outbound-ip-addresses
+  R4  First deploy / Blueprint specification
+      https://render.com/docs/your-first-deploy
+      https://render.com/docs/blueprint-spec
+  R5  Render custom domain / TLS setup
+      https://render.com/docs/custom-domains
+      https://render.com/docs/tls
+
+  M1  Atlas Free/M0 deployment and app database-user/network setup
+      https://www.mongodb.com/docs/atlas/tutorial/deploy-free-tier-cluster/
+  M2  Official MongoDB Database Tools (mongodump/mongorestore)
+      https://www.mongodb.com/try/download/database-tools
+      https://www.mongodb.com/docs/database-tools/
+
+  V1  Vercel Hobby eligibility: personal / non-commercial
+      https://vercel.com/docs/plans/hobby
+  V2  Blob store creation, PRIVATE access and static outside-Vercel token
+      https://vercel.com/docs/vercel-blob/using-blob-sdk
+  V3  Python Blob SDK: official vercel-blob 0.5.0+ interface
+      https://vercel.com/docs/vercel-blob/python-sdk-reference
+  V4  Blob quotas / pricing - check your actual selected account
+      https://vercel.com/docs/vercel-blob/usage-and-pricing
+
+  S1  Stripe webhooks, snapshot/thin formats, signatures and destinations
+      https://docs.stripe.com/webhooks
+  S2  Stripe CLI install / local listener
+      https://docs.stripe.com/stripe-cli
+      https://docs.stripe.com/cli/install
+      https://docs.stripe.com/cli/listen
+  S3  Checkout fulfillment / idempotency: redirect alone is not fulfillment
+      https://docs.stripe.com/checkout/fulfillment
+  S4  Stripe testing - never use real cards/live credentials here
+      https://docs.stripe.com/testing
+
+  E1  Resend verified domains / sender setup
+      https://resend.com/docs/dashboard/domains/introduction
+      https://resend.com/docs/add-a-domain
+
+  P1  Official Python / Windows runtime information
+      https://www.python.org/downloads/
+      https://docs.python.org/3.13/using/windows.html
+  G1  GitHub Desktop / private repository documentation
+      https://desktop.github.com/
+      https://docs.github.com/en/repositories/creating-and-managing-repositories
+
+VERIFICATION BOUNDARY:
+
+  The app's launcher/installed Windows-file/payload integrity, offline unpack/
+  repair, static Windows dependency closure, safety fixtures and isolated
+  browser controls were checked in the build workspace. These checks are not
+  native Windows execution, a physical mobile test, a real deployment, new
+  provider-origin approval, actual mail delivery or a new payment/generation.
+
+  Creating this guide did not restart/replace the running app or MongoDB,
+  migrate data, create a cloud resource/account, enable paid plans, expose
+  credentials or perform paid AI/Stripe QA. Follow the correct chosen path,
+  preserve authoritative data and resolve actual external gates rather than
+  bypassing safety checks to make a deployment look complete.
+
+END OF install_instructions.txt
