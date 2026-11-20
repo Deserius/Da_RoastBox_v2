@@ -516,7 +516,8 @@ async def _analyze_images(client, images: List[bytes], image_types: List[str], o
                 {"role": "user", "content": [{"type": "text", "text":
                     f"Analyze {len(images)} images in upload order (starting at index 0). Off-limits topics (data): {boundaries}"},
                     *_image_parts(images, image_types)]}]
-    try:
+
+    async def _call():
         result = await asyncio.to_thread(client.chat.completions.create, model="gpt-4o", messages=messages,
                                          temperature=0.2, max_tokens=ROAST_VISION_MAX_TOKENS,
                                          timeout=ROAST_VISION_TIMEOUT_S)
@@ -524,6 +525,22 @@ async def _analyze_images(client, images: List[bytes], image_types: List[str], o
         # Some compatible gateways wrap JSON in a code fence.
         raw = re.sub(r"\s*```\s*$", "", re.sub(r"^```(?:json|JSON)?\s*", "", raw)).strip()
         return _normalize_photo_observations(raw, len(images), off_limits)
+
+    try:
+        return await _call()
+    except RateLimitError:
+        # A burst limit can clear in a couple of seconds; a hard quota/billing
+        # block will not, so only one short retry is worth the wait here.
+        log.warning("Photo analysis rate limited; retrying once after a short pause")
+        try:
+            await asyncio.sleep(2.0)
+            return await _call()
+        except RateLimitError as exc:
+            log.warning("Photo analysis failed (RateLimitError, retry also rate limited): %s", exc)
+            raise RuntimeError("Photo analysis rate-limited by the AI provider; no show credits were charged") from None
+        except Exception as exc:
+            log.warning("Photo analysis failed (%s)", type(exc).__name__)
+            raise RuntimeError("Photo analysis unavailable; no show credits were charged") from None
     except Exception as exc:
         log.warning("Photo analysis failed (%s)", type(exc).__name__)
         raise RuntimeError("Photo analysis unavailable; no show credits were charged") from None

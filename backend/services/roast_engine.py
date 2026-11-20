@@ -180,6 +180,12 @@ def friendly_ai_error(e: Exception) -> HTTPException:
             "ROAST_WRITER_PROVIDER=existing to use the configured OpenAI/Emergent provider."))
     if "no ai provider key configured" in low:
         return HTTPException(status_code=503, detail="No AI provider key configured. Add an OpenAI key in Settings or configure EMERGENT_LLM_KEY / OPENAI_API_KEY on the server.")
+    if "rate-limited by the ai provider" in low:
+        return HTTPException(status_code=429, detail=(
+            "Your AI provider rate-limited or ran out of quota for this request (common for a new OpenAI account's "
+            "first gpt-4o photo-analysis call). Check your payment method and usage limits at "
+            "platform.openai.com/settings/organization/billing and .../limits, then try again in a minute or two. "
+            "No RoastBox credits were charged."))
     if "cloudflare" in low or "403" in low or "blocked" in low:
         return HTTPException(status_code=502, detail="Upstream filter blocked this roast. Try a different photo or context.")
     if "refused" in low or "policy" in low:
