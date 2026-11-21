@@ -6,6 +6,7 @@ stock install never needs the Emergent platform.
 """
 import asyncio
 import logging
+import time
 from typing import Optional
 from openai import OpenAI
 
@@ -17,6 +18,33 @@ log = logging.getLogger(__name__)
 _GATEWAY_URL = "https://integrations.emergentagent.com/llm"
 EXPRESSIVE_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"}
 CLASSIC_VOICES = {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
+
+# A 429 with an empty/unfunded account will fail identically on every beat of
+# a show until the operator adds billing credits - retrying it per beat (each
+# attempt already costs a network round trip plus one SDK-level retry) only
+# multiplies a many-beat show's failure time by its beat count for no benefit.
+# Once one call confirms the account has no credits, skip straight to the
+# fallback for a short cooldown instead of repeating the doomed call; the
+# cooldown expires on its own so a freshly-funded account recovers without a
+# server restart.
+_QUOTA_COOLDOWN_S = 90.0
+_quota_blocked_until: dict[str, float] = {}
+
+
+def _quota_cache_key(byok_key: Optional[str]) -> str:
+    # Never cache raw keys; BYOK users must never share another account's
+    # cooldown, so key on a short opaque fingerprint instead of the key itself.
+    return byok_key[-8:] if byok_key else "__shared__"
+
+
+def _is_quota_exhausted_error(exc: Exception) -> bool:
+    """True for "this account has no billing credits", not generic rate limits.
+
+    OpenAI reuses HTTP 429 for both; only the former is worth short-circuiting
+    since retrying a true rate limit can still succeed moments later.
+    """
+    text = str(exc).lower()
+    return any(n in text for n in ("insufficient_quota", "credit_balance_exhausted", "billing_not_active"))
 
 
 def get_client(byok_key: Optional[str] = None, timeout: float = 90.0) -> OpenAI:
@@ -65,6 +93,13 @@ def _read(resp) -> bytes:
 async def synthesize_tts_openai(text: str, voice: str = "onyx", speed: float = 1.0,
                                 byok_key: Optional[str] = None, instructions: Optional[str] = None) -> bytes:
     """Expressive TTS (gpt-4o-mini-tts + acting instructions); falls back to tts-1 on failure."""
+    cache_key = _quota_cache_key(byok_key)
+    blocked_until = _quota_blocked_until.get(cache_key)
+    if blocked_until and time.monotonic() < blocked_until:
+        raise RuntimeError(
+            "OpenAI TTS skipped: this account had no billing credits moments ago in this "
+            "same show (not retried on every beat). Add credits to retry sooner."
+        )
     client = get_client(byok_key, timeout=20.0)
     if instructions and TTS_MODEL != "tts-1":
         try:
@@ -75,10 +110,18 @@ async def synthesize_tts_openai(text: str, voice: str = "onyx", speed: float = 1
             )
             return _read(resp)
         except Exception as e:
+            if _is_quota_exhausted_error(e):
+                _quota_blocked_until[cache_key] = time.monotonic() + _QUOTA_COOLDOWN_S
+                raise
             log.warning("Expressive TTS failed (%s); falling back to tts-1.", e)
-    resp = await asyncio.to_thread(
-        client.audio.speech.create, model="tts-1",
-        voice=voice if voice in CLASSIC_VOICES else "onyx",
-        input=text, response_format="mp3", speed=max(0.5, min(2.0, float(speed))),
-    )
-    return _read(resp)
+    try:
+        resp = await asyncio.to_thread(
+            client.audio.speech.create, model="tts-1",
+            voice=voice if voice in CLASSIC_VOICES else "onyx",
+            input=text, response_format="mp3", speed=max(0.5, min(2.0, float(speed))),
+        )
+        return _read(resp)
+    except Exception as e:
+        if _is_quota_exhausted_error(e):
+            _quota_blocked_until[cache_key] = time.monotonic() + _QUOTA_COOLDOWN_S
+        raise
