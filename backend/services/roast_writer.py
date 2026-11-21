@@ -960,7 +960,18 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
     openai_key = OPENAI_API_KEY or secret_cached("OPENAI_API_KEY")
     emergent_key = EMERGENT_LLM_KEY or secret_cached("EMERGENT_LLM_KEY")
     direct_openai = bool(byok_key or (openai_key and (AI_DEFAULT_PROVIDER == "openai" or not emergent_key)))
-    models = [m for m in MODEL_CHAIN if not m.startswith("claude")] if direct_openai else MODEL_CHAIN
+    if direct_openai:
+        # This is the only writer path for an OpenAI-only setup (no OpenRouter
+        # key configured), so it must respect the same configurable free/premium
+        # OpenAI models as the OpenRouter-backup tier below - not the hardcoded,
+        # always-expensive gpt-4.1/gpt-4o the Emergent gateway chain uses.
+        # Otherwise a "free" standard show silently bills a premium model.
+        premium = roast_tier == "premium"
+        free_model = setting_cached("ROAST_OPENAI_FREE_MODEL", ROAST_OPENAI_FREE_MODEL)
+        premium_model = setting_cached("ROAST_OPENAI_PREMIUM_MODEL", ROAST_OPENAI_PREMIUM_MODEL)
+        models = _dedup([premium_model, free_model]) if premium else [free_model]
+    else:
+        models = list(MODEL_CHAIN)
     text = ""
     for model in models:
         try:

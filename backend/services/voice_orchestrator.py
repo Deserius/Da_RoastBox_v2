@@ -1,6 +1,9 @@
-"""Voice orchestrator: ElevenLabs v3 (BYOK or hosted key, emotion tags) → OpenAI expressive TTS fallback.
+"""Voice orchestrator: ElevenLabs v3 -> OpenAI expressive TTS -> local Kokoro fallback.
 
 Per-persona voice config lives in data/personas.json (`tts_voice_hd`, `voice_direction`, `elevenlabs`).
+Kokoro (services/kokoro_service.py) needs no API key and no credits, so it is
+the last tier instead of a hard failure: a show only ships without audio if
+every tier - including the always-available local one - could not run.
 """
 import asyncio
 import hashlib
@@ -10,11 +13,12 @@ import uuid
 from collections import OrderedDict
 from typing import Dict, List, Optional, Tuple
 
-from config import (AUDIO_DIR, ELEVENLABS_API_KEY, ROAST_TTS_CACHE, ROAST_TTS_CONCURRENCY,
-                    ROAST_TTS_TIMEOUT_S)
+from config import (AUDIO_DIR, ELEVENLABS_API_KEY, LOCAL_TTS_ENABLED, ROAST_TTS_CACHE,
+                    ROAST_TTS_CONCURRENCY, ROAST_TTS_TIMEOUT_S)
 from services.runtime_settings import secret_cached
 from .openai_service import synthesize_tts_openai
 from .elevenlabs_service import synthesize_tts_elevenlabs
+from .kokoro_service import synthesize_tts_kokoro
 from .storage import save_audio
 
 log = logging.getLogger(__name__)
@@ -108,6 +112,7 @@ async def synthesize_line(text: str, persona_id: str, persona_meta: Optional[dic
     meta = persona_meta or {}
     audio: Optional[bytes] = None
     provider = "none"
+    rate = float((meta.get("speech") or {}).get("rate") or 1.0)
     shared_eleven = ELEVENLABS_API_KEY or secret_cached("ELEVENLABS_API_KEY")
     eleven_key = user_elevenlabs_key or (shared_eleven if premium_voices_unlocked else None)
     if eleven_key:
@@ -119,16 +124,28 @@ async def synthesize_line(text: str, persona_id: str, persona_meta: Optional[dic
             provider = "elevenlabs"
         except Exception as e:
             log.warning("ElevenLabs synth failed (%s); falling back to OpenAI TTS.", e)
+    if audio is None and (allow_hosted_openai or user_openai_key):
+        try:
+            audio = await synthesize_tts_openai(
+                text=text, voice=meta.get("tts_voice_hd") or meta.get("tts_voice") or "ash",
+                speed=rate, byok_key=user_openai_key, instructions=acting_instructions(meta, beat),
+            )
+            provider = "openai"
+        except Exception as e:
+            log.warning("OpenAI TTS failed (%s); falling back to local voice.", e)
+    if audio is None and LOCAL_TTS_ENABLED:
+        try:
+            audio = await synthesize_tts_kokoro(
+                text=text, persona_id=persona_id or meta.get("id"), persona_meta=meta, speed=rate)
+            provider = "kokoro"
+        except Exception as e:
+            log.warning("Local voice fallback failed (%s).", e)
     if audio is None:
-        if not allow_hosted_openai and not user_openai_key:
-            raise RuntimeError("Preview voice requires a personal OpenAI key when ElevenLabs is unavailable")
-        audio = await synthesize_tts_openai(
-            text=text, voice=meta.get("tts_voice_hd") or meta.get("tts_voice") or "ash",
-            speed=float((meta.get("speech") or {}).get("rate") or 1.0),
-            byok_key=user_openai_key, instructions=acting_instructions(meta, beat),
+        raise RuntimeError(
+            "No voice provider produced audio. Configure an OpenAI or ElevenLabs key, or enable "
+            "the local voice fallback (see backend/requirements-local-voice.txt)."
         )
-        provider = "openai"
-    key = _cache_key(text, f"{persona_id or meta.get('id')}:{meta.get('tts_voice_hd') or meta.get('tts_voice') or 'ash'}",
+    key = _cache_key(text, f"{persona_id or meta.get('id')}:{meta.get('tts_voice_hd') or meta.get('tts_voice') or 'ash'}:{provider}",
                      acting_instructions(meta, beat), provider)
     cached = _cache_get(key)
     if cached:

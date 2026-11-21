@@ -95,6 +95,9 @@ android-sdk/
 
 backend/audio_cache/
 
+# Downloaded local-voice model weights (fetched by scripts/setup_local_voice.py)
+backend/models/
+
 # Local configuration, preview database, and generated private media
 .env
 .env.*

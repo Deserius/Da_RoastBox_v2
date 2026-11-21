@@ -145,7 +145,10 @@ async def generate_battle(
         premium_voices=premium_voices)
     if not transcript or any(not beat.get("audio_url") for beat in transcript):
         # A paid result must not silently ship as a partial/silent show.
-        raise HTTPException(status_code=503, detail="Voice generation failed. Check your OpenAI or ElevenLabs configuration; no credits were charged.")
+        raise HTTPException(status_code=503, detail=(
+            "Voice generation failed. Check your OpenAI or ElevenLabs configuration, or run "
+            "scripts/setup_local_voice.py once to enable the free local voice fallback. "
+            "No credits were charged."))
     result = score_battle(transcript, a["id"], b["id"], random.Random())
 
     record = RoastRecord(

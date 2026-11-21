@@ -10,7 +10,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from auth_deps import get_current_user, get_optional_user
-from config import DATA_DIR, EMERGENT_LLM_KEY, OPENAI_API_KEY, ELEVENLABS_API_KEY
+from config import DATA_DIR, EMERGENT_LLM_KEY, OPENAI_API_KEY, ELEVENLABS_API_KEY, LOCAL_TTS_ENABLED
 from services.runtime_settings import secret_cached
 from db import (users_collection, voice_previews_collection, voice_preview_samples_collection,
                 voice_preview_leases_collection)
@@ -127,7 +127,10 @@ async def voice_preview(persona_id: str, sample: int = Query(0, ge=0), current_u
                     if preview and not (byok_openai or byok_eleven):
                         await consume_preview_hosted("voice")
                         preview_hosted = True
-                    if not (byok_openai or byok_eleven or hosted_available or preview_hosted):
+                    # The local voice fallback needs no key at all, so it alone is enough
+                    # to let this proceed; synthesize_line() raises its own clear error
+                    # below if that tier is also unavailable or fails.
+                    if not (byok_openai or byok_eleven or hosted_available or preview_hosted or LOCAL_TTS_ENABLED):
                         raise HTTPException(status_code=503, detail="Voice preview requires an OpenAI or ElevenLabs key in Settings, or configured hosted AI credentials.")
                     try:
                         await synthesize_line(line, persona_id, p, byok_eleven, byok_openai,

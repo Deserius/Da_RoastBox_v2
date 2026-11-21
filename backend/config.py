@@ -136,6 +136,24 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # Optional safety rail for staging: reject live/restricted-live Stripe keys.
 STRIPE_TEST_ONLY = os.environ.get("STRIPE_TEST_ONLY", "true").strip().lower() in ("1", "true", "yes")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+# Hardcoded, key-free local voice fallback: Kokoro (Apache-2.0 neural TTS),
+# tried only after ElevenLabs and OpenAI TTS are unconfigured or fail, so a
+# show never ships silent just because no voice provider key is set. Needs the
+# optional `kokoro-onnx` package (backend/requirements-local-voice.txt) and its
+# model weights, fetched on first use into KOKORO_MODEL_DIR - never bundled in
+# git. See services/kokoro_service.py.
+LOCAL_TTS_ENABLED = os.environ.get("LOCAL_TTS_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+# fp16 keeps virtually all of the full model's quality (~0.999 spectral
+# correlation) at half the download size; int8 is smaller but audibly softer,
+# fp32 is the reference weights at twice the download.
+KOKORO_VARIANT = os.environ.get("KOKORO_VARIANT", "fp16").strip().lower()
+if KOKORO_VARIANT not in ("fp32", "fp16", "int8"):
+    raise ValueError("KOKORO_VARIANT must be fp32, fp16 or int8")
+KOKORO_MODEL_DIR = Path(os.environ.get("KOKORO_MODEL_DIR") or ROOT_DIR / "models" / "kokoro").expanduser().resolve()
+# Off switches automatic fetching of the (~100-300MB) model weights; the
+# fallback then stays unavailable until an operator runs
+# scripts/setup_local_voice.py or places the files there manually.
+KOKORO_AUTO_DOWNLOAD = os.environ.get("KOKORO_AUTO_DOWNLOAD", "true").strip().lower() in ("1", "true", "yes")
 # Platform-injected; may be "" so use `or`.
 INTEGRATION_PROXY_URL = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 TTS_MODEL = os.environ.get("TTS_MODEL", "gpt-4o-mini-tts")

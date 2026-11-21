@@ -197,7 +197,10 @@ async def _run_generation(*, current_user: User, personas: List[dict], ids: List
     log.info("roast_timing total_ms=%d (script+voice)", round((time.monotonic() - _pipeline_start) * 1000))
     if not transcript or any(not beat.get("audio_url") for beat in transcript):
         # A paid result must not silently ship as a partial/silent show.
-        raise HTTPException(status_code=503, detail="Voice generation failed. Check your OpenAI or ElevenLabs configuration; no credits were charged.")
+        raise HTTPException(status_code=503, detail=(
+            "Voice generation failed. Check your OpenAI or ElevenLabs configuration, or run "
+            "scripts/setup_local_voice.py once to enable the free local voice fallback. "
+            "No credits were charged."))
 
     desc = (f"{roast_tier.capitalize()} Roast ({duration_minutes}min)" + (" +PremiumVoice" if use_premium_voice else "")
             + (" +PremiumPersona" if uses_premium_persona else "") + (" +HDExport" if hd_export else ""))

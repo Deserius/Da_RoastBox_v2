@@ -1,0 +1,13 @@
+# Optional: the hardcoded, key-free local voice fallback (Kokoro neural TTS).
+# Not part of backend/requirements.txt - the app runs fully without this; it
+# only unlocks a free, natural-sounding voice tier for when no OpenAI or
+# ElevenLabs key is configured (or a configured one fails/runs out of credit).
+#
+# Install:    python scripts/setup_local_voice.py
+#    or:      python -m pip install -r backend/requirements-local-voice.txt
+#             (then download the model weights the same script fetches)
+#
+# kokoro-onnx currently declares support for Python 3.10-3.13. On a newer or
+# older interpreter this install step is expected to fail; that is fine, the
+# app falls back to requiring an OpenAI/ElevenLabs key exactly as before.
+kokoro-onnx>=0.6.1

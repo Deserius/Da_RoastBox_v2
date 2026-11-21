@@ -94,6 +94,23 @@ browser's address bar. `install.py` shows this same hint next to the Google
 fields, and the in-app Settings console shows it computed from the page's
 actual origin.
 
+**Optional: free local voice, no API key at all.** Without an OpenAI or
+ElevenLabs key, voice generation fails with a 503. Run this once to add a
+built-in, offline, natural-sounding voice fallback (Kokoro) instead:
+
+```bash
+python scripts/setup_local_voice.py
+```
+
+This installs one extra package and downloads its ~150MB of model weights
+into `backend/models/kokoro/`. It needs Python 3.10–3.13 (a limit of the
+`kokoro-onnx` package itself, not this project); on 3.14 the script prints a
+clear note and the app keeps working exactly as before, still requiring an
+OpenAI/ElevenLabs key for voice. Once installed, every comic persona speaks
+with its own distinct assigned voice automatically — nothing else to
+configure, and it is tried only after ElevenLabs and OpenAI are unavailable
+or fail, so a configured paid key is always preferred when it works.
+
 ---
 
 ## 4. Run it
