@@ -16,6 +16,7 @@ import re
 from typing import Dict, List, Optional
 
 from .openai_service import get_client, get_emergent_client
+from .ai_errors import is_quota_exhausted_error
 from services.runtime_settings import secret_cached, setting_cached
 from config import (EMERGENT_LLM_KEY, OPENAI_API_KEY, AI_DEFAULT_PROVIDER, ROAST_WRITER_PROVIDER,
                     OPENROUTER_API_KEY, ROAST_WRITER_MODEL, ROAST_FREE_WRITER_ONLY,
@@ -571,20 +572,25 @@ async def _analyze_images(images: List[bytes], image_types: List[str], off_limit
         return _normalize_photo_observations(raw, len(images), off_limits)
 
     # A caller's own OpenAI key stays direct-to-OpenAI only - it is never sent
-    # to a third party like OpenRouter.
+    # to a third party like OpenRouter. Still respects the configured
+    # free/premium model tier rather than hardcoding one model regardless of
+    # the user's selection.
     if byok_key:
-        chain = [("openai", "gpt-4o")]
+        byok_free = setting_cached("ROAST_OPENAI_FREE_MODEL", ROAST_OPENAI_FREE_MODEL)
+        byok_premium = setting_cached("ROAST_OPENAI_PREMIUM_MODEL", ROAST_OPENAI_PREMIUM_MODEL)
+        byok_models = _dedup([byok_premium, byok_free]) if (premium and not ROAST_FREE_WRITER_ONLY) else [byok_free]
+        chain = [("openai", m) for m in byok_models]
     else:
         openrouter_key = OPENROUTER_API_KEY or secret_cached("OPENROUTER_API_KEY")
         chain = _vision_model_chain(premium, openrouter_key)
 
     rate_limited_any = False
+    quota_exhausted_any = False
     skip_providers: set = set()
-    last_attempt = None
+    last_retryable = None
     for provider, model in chain:
         if provider in skip_providers:
             continue
-        last_attempt = (provider, model)
         try:
             return await _call(provider, model)
         except (AuthenticationError, PermissionDeniedError) as exc:
@@ -592,17 +598,26 @@ async def _analyze_images(images: List[bytes], image_types: List[str], off_limit
             # skip straight to the next provider instead of wasting attempts.
             log.warning("Photo analysis provider %s rejected the configured key (%s)", provider, type(exc).__name__)
             skip_providers.add(provider)
-        except RateLimitError:
-            rate_limited_any = True
-            log.warning("Photo analysis rate limited on %s/%s", provider, model)
+        except RateLimitError as exc:
+            if is_quota_exhausted_error(exc):
+                # A zero-credit/zero-quota account fails this exact call every
+                # time until the operator adds billing - retrying it, or this
+                # provider's other models, only wastes the request budget.
+                quota_exhausted_any = True
+                skip_providers.add(provider)
+                log.warning("Photo analysis: %s has no billing credits/quota for %s", provider, model)
+            else:
+                rate_limited_any = True
+                last_retryable = (provider, model)
+                log.warning("Photo analysis rate limited on %s/%s", provider, model)
         except Exception as exc:
             log.warning("Photo analysis failed on %s/%s (%s)", provider, model, type(exc).__name__)
 
-    if rate_limited_any and last_attempt:
+    if rate_limited_any and last_retryable:
         # A burst limit can clear in a couple of seconds; a hard quota/billing
-        # block will not, so only one short-pause retry of the last option is
-        # worth the wait here rather than retrying every model in the chain.
-        provider, model = last_attempt
+        # block will not, so only one short-pause retry of the last genuinely
+        # rate-limited (not quota-exhausted) option is worth the wait here.
+        provider, model = last_retryable
         log.warning("All photo analysis options exhausted; retrying %s/%s once after a short pause", provider, model)
         try:
             await asyncio.sleep(2.0)
@@ -612,6 +627,8 @@ async def _analyze_images(images: List[bytes], image_types: List[str], off_limit
 
     if rate_limited_any:
         raise RuntimeError("Photo analysis rate-limited by the AI provider; no show credits were charged") from None
+    if quota_exhausted_any:
+        raise RuntimeError("Photo analysis failed: a configured AI provider has no billing credits or quota; no show credits were charged") from None
     raise RuntimeError("Photo analysis unavailable; no show credits were charged") from None
 
 
@@ -859,6 +876,7 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
         if allow_emergent:
             writers.append(("emergent", MODEL_CHAIN[0]))
         rate_retried = False
+        quota_exhausted_any = False
         for label, model in writers:
             started = time.monotonic()
             try:
@@ -947,7 +965,13 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
                 log.info("Script writer=%s model=%s len=%d", label, model, len(candidate))
                 return _attach_lineup_roasts(beats, candidate, personas, adult=adult, off_limits=off_limits)
             except Exception as e:
+                if is_quota_exhausted_error(e):
+                    quota_exhausted_any = True
                 log.warning("Script writer %s model=%s failed (%s) latency_ms=%d tokens=unknown cost_usd=unknown", label, model, type(e).__name__, round((time.monotonic() - started) * 1000))
+        if quota_exhausted_any:
+            raise RuntimeError(
+                "Script did not pass local checks or configured writers failed; a configured AI "
+                "provider also has no billing credits or quota")
         raise RuntimeError("Script did not pass local checks or configured writers failed")
 
     client = get_client(byok_key)
@@ -973,6 +997,7 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
     else:
         models = list(MODEL_CHAIN)
     text = ""
+    quota_exhausted_any = False
     for model in models:
         try:
             resp = await asyncio.to_thread(client.chat.completions.create, model=model, messages=messages,
@@ -984,8 +1009,12 @@ async def write_script(user_block: str, personas: List[Dict], images: List[bytes
             text = cand
             break
         except Exception as e:
+            if is_quota_exhausted_error(e):
+                quota_exhausted_any = True
             log.warning("Model %s failed (%s)", model, type(e).__name__)
     if not text:
+        if quota_exhausted_any:
+            raise RuntimeError("All roast models failed; a configured AI provider has no billing credits or quota")
         raise RuntimeError("All roast models refused or failed. Try different context / subject.")
     # Do not silently make another paid critique/rewrite call. Existing provider
     # fallback above remains only for failed/refused model calls.

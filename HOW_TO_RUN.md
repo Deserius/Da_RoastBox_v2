@@ -81,18 +81,23 @@ Pasting a client ID/secret here only checks that Google *recognizes the
 pair* — it can't catch the #1 cause of sign-in failing later with
 `Error 400: redirect_uri_mismatch`. That error means the redirect URI Google
 received doesn't exactly match one of the **Authorized redirect URIs** on
-your OAuth client. For the default local run (`http://127.0.0.1:8001`), add
-both of these on the OAuth client in Google Cloud Console → **APIs & Services
-→ Credentials**:
+your OAuth client. The redirect URI is computed by whatever page is actually
+in your browser's address bar — that's the **frontend's** port, not the
+API's. For the default local run (`start.bat` / `scripts/local_start.py`,
+app opens at `http://127.0.0.1:3000` while the API listens separately on
+`8001`), add both of these on the OAuth client in Google Cloud Console →
+**APIs & Services → Credentials**:
 
-- Authorized redirect URI: `http://127.0.0.1:8001/auth-complete.html`
-- Authorized JavaScript origin: `http://127.0.0.1:8001`
+- Authorized redirect URI: `http://127.0.0.1:3000/auth-complete.html`
+- Authorized JavaScript origin: `http://127.0.0.1:3000`
 
-Match the port you actually run on, and note that Google treats `localhost`
-and `127.0.0.1` as different values — use whichever one is actually in your
-browser's address bar. `install.py` shows this same hint next to the Google
-fields, and the in-app Settings console shows it computed from the page's
-actual origin.
+Match the port you actually run on (check `frontend/.env`'s `PORT` if you
+changed it — `backend/.env`'s `PORT` is the separate API process and is
+**not** what Google needs here), and note that Google treats `localhost` and
+`127.0.0.1` as different values — use whichever one is actually in your
+browser's address bar. `install.py` shows this same hint (read from
+`frontend/.env`) next to the Google fields, and the in-app Settings console
+shows it computed from the page's actual origin.
 
 **Optional: free local voice, no API key at all.** Without an OpenAI or
 ElevenLabs key, voice generation fails with a 503. Run this once to add a

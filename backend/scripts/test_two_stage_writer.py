@@ -32,7 +32,9 @@ async def main():
         request = json.dumps(creative.calls)
         assert 'red hat' in request and 'family portrait' not in request
         assert 'data:image' not in request and 'private image bytes' not in request and 'BYOK_PRIVATE' not in request
-        assert vision.calls[0]['model'] == 'gpt-4o' and creative.calls[0]['model'] == 'test-model:free'
+        # BYOK vision respects the configured free/premium OpenAI model tier
+        # (standard here, by default) rather than always hardcoding gpt-4o.
+        assert vision.calls[0]['model'] == w.ROAST_OPENAI_FREE_MODEL and creative.calls[0]['model'] == 'test-model:free'
         creative.calls.clear(); vision.calls.clear()
         await w.write_script('text only', people, [], [], expected_beats=10)
         assert not vision.calls and len(creative.calls) == 1

@@ -12,6 +12,7 @@ from openai import OpenAI
 
 from config import EMERGENT_LLM_KEY, OPENAI_API_KEY, AI_DEFAULT_PROVIDER, TTS_MODEL
 from services.runtime_settings import secret_cached
+from services.ai_errors import is_quota_exhausted_error
 
 log = logging.getLogger(__name__)
 
@@ -37,14 +38,7 @@ def _quota_cache_key(byok_key: Optional[str]) -> str:
     return byok_key[-8:] if byok_key else "__shared__"
 
 
-def _is_quota_exhausted_error(exc: Exception) -> bool:
-    """True for "this account has no billing credits", not generic rate limits.
-
-    OpenAI reuses HTTP 429 for both; only the former is worth short-circuiting
-    since retrying a true rate limit can still succeed moments later.
-    """
-    text = str(exc).lower()
-    return any(n in text for n in ("insufficient_quota", "credit_balance_exhausted", "billing_not_active"))
+_is_quota_exhausted_error = is_quota_exhausted_error  # shared with roast_writer.py / roast_engine.py
 
 
 def get_client(byok_key: Optional[str] = None, timeout: float = 90.0) -> OpenAI:

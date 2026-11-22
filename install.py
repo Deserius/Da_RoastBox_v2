@@ -62,11 +62,11 @@ def ensure_env_file() -> None:
     ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def read_env() -> dict:
+def read_env(path: Path = ENV_PATH) -> dict:
     values: dict[str, str] = {}
-    if not ENV_PATH.exists():
+    if not path.exists():
         return values
-    for line in ENV_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         s = line.strip()
         if not s or s.startswith("#") or "=" not in s:
             continue
@@ -447,12 +447,20 @@ class App:
                 # URI in Google Cloud Console. Verify can't catch it - Google
                 # only checks the redirect_uri during the real sign-in
                 # request, not this key check - so spell it out up front.
-                port = (existing.get("PORT") or "8001").strip() or "8001"
+                #
+                # The redirect_uri Google actually sees is computed by the
+                # *browser* from the page it is sitting on - i.e. the
+                # frontend's own port (frontend/.env PORT, default 3000) -
+                # never backend/.env's PORT (that's the separate API process,
+                # default 8001, and the browser never navigates there).
+                frontend_env = read_env(ROOT / "frontend" / ".env")
+                port = (frontend_env.get("PORT") or "3000").strip() or "3000"
                 hint = (
                     f"In Google Cloud Console \u2192 Credentials \u2192 this OAuth client, add under "
                     f"\"Authorized redirect URIs\":  http://127.0.0.1:{port}/auth-complete.html\n"
                     f"and under \"Authorized JavaScript origins\":  http://127.0.0.1:{port}\n"
-                    f"(must match the address bar exactly, including the port - \"localhost\" and "
+                    f"(this is the port the app's web page itself loads on - NOT the API port - and "
+                    f"must match the address bar exactly, including the port - \"localhost\" and "
                     f"\"127.0.0.1\" are NOT interchangeable to Google)."
                 )
                 ttk.Label(body, text=hint, wraplength=680, justify="left", foreground="#555") \
